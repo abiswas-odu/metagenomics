@@ -18,7 +18,8 @@
 class Dataset
 {
 	private:
-
+		UINT64 numberOfReads;								// Number of total reads present in the dataset.
+		UINT64 numberOfUniqueReads; 						// number of unique reads in the dataset.
 		UINT64 minimumOverlapLength;						// Length of the shortest read in the dataset.
 		vector<Read *> *reads; 								// List of reads in the dataset.
 		string reverseComplement(const string & read); 		// Get the reverse complement of a string.
@@ -29,9 +30,6 @@ class Dataset
 		void sortReads(void);								// Ted: sort the reads lexicographically.
 
 	public:
-		UINT64 numberOfReads;								// Number of total reads present in the dataset.
-		UINT64 numberOfUniqueReads; 						// number of unique reads in the dataset.
-		UINT64 numberOfPairedDatasets;
 		vector<string> pairedEndDatasetFileNames;
 		vector<string> singleEndDatasetFileNames;
 		UINT64 shortestReadLength;
@@ -44,11 +42,11 @@ class Dataset
 		UINT64 getNumberOfReads(void); 						// Get the number of total reads in the database.
 		UINT64 getNumberOfUniqueReads(void); 				// Get the number of unique reads in the database.
 		bool printDataset(void); 							// Print few the reads in the dataset. For debuggin only.
+        // Ted: change it to constant pointer
 		Read * getReadFromString(const string & read); 		// Find a read in the database given the string. Uses binary search in the list of reads.
 		Read * getReadFromID(UINT64 ID); 					// Find a read in the database given the ID in constant time.
 		void readMatePairsFromFile(void);					// Read the matePairs from file
 		void saveReads(string fileName);					// Save all the sorted unique reads in a text file. Used for debugging.
-		void addRead(Read *r){reads->push_back(r);}
 
 };
 

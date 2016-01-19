@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <cstdlib>
-#include <time.h>
+#include<time.h>
 #include <algorithm>
 #include <iostream>
 #include <string>
@@ -37,19 +37,11 @@ typedef unsigned long long UINT64;
 typedef long long INT64;
 
 
-#define aStatisticsThreshold 3  // This in not used. Used previously in estimating the genome size in isolated genome assembly.
-#define minDelta 1000			// This in not used. Used previously in estimating the genome size in isolated genome assembly.
-#define deadEndLength 10		// Threshold of number of nodes in an edge for deleting dead-ends.
-								// CP: if a node has many duplicate reads, it's still counted as one, right?
-								// BH: Yes we only consider a read once.
-#define minimumSupport 1		// Minimum number of support required to merge to edges (both using matepair paths and scaffolding step)
-								// CP: should we consider using different thresholds for matepair paths and scaffolding?
-								// BH: If we want we can use different thresholds.
-#define loopLimit 15			// Number of time to loop in the main function.
-#define insertSizeRangeSD 3		// 3 means mean +/- 3 SD
-#define	coverageDepthLB 40		// Lower bound of coverage depth for the genome that we want to assemble.
-#define coverageDepthUB 200	// Upper bound of the coverage depth of teh genome that we want to assemble.
-#define minimumReadCountInEdgeWith1MinFlow 20
+#define aStatisticsThreshold 3
+#define minDelta 1000
+#define deadEndLength 10
+#define minimumSupport 3
+#define loopLimit 15
 
 //	Exit code that displays the place of exit and message.
 #define MYEXIT(a) { cout << endl << "Exit from File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << "()" << endl << "Message: " << a << endl; exit(0);}
@@ -82,6 +74,7 @@ inline unsigned int checkMemoryUsage()
     // return MBs memory (size of data)
     return (count/1024);
 };
+
 
 
 

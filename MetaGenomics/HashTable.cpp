@@ -85,7 +85,7 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength)
 /**********************************************************************************************************************
 	Insert a read in the hashTable
 **********************************************************************************************************************/
-bool HashTable::hashRead(const Read *read)
+bool HashTable::hashRead(Read *read)
 {
 	string forwardRead = read->getStringForward();
 	string reverseRead = read->getStringReverse();
@@ -132,7 +132,7 @@ void HashTable::setHashTableSize(UINT64 size)
 /**********************************************************************************************************************
 	Returns the hash value of a subString
 **********************************************************************************************************************/
-UINT64 HashTable::hashFunction(const string & subString) const
+UINT64 HashTable::hashFunction(string subString)
 {
 	UINT64 sum1 = 1, sum2 = 1, length = subString.length();
 	for(UINT64 i = 0; i < length; i++)			// We take the bit representation of the string. A = 00, C = 01, G = 11 and T = 10
@@ -160,7 +160,7 @@ UINT64 HashTable::hashFunction(const string & subString) const
 /**********************************************************************************************************************
 	Insert a subString in a hashTable
 **********************************************************************************************************************/
-bool HashTable::insertIntoTable(const Read *read, const string & subString, const UINT64 & orientation)
+bool HashTable::insertIntoTable(Read *read, string subString, UINT64 orientation)
 {
 	UINT64 ID = read->getReadNumber() | (orientation << 62); 	// Most significant two bits are used to store the orientation of the string in the read.
 																// 00 = 0 means prefix of the forward string.
@@ -174,17 +174,10 @@ bool HashTable::insertIntoTable(const Read *read, const string & subString, cons
 	while(!hashTable->at(index)->empty())
 	{
 		UINT64 data = hashTable->at(index)->at(0);
-		// CP: explain these two bit operations
-		// The least significant 62 bits are used to store the read ID
-		// Ted: readNumber =   00111111 11111111 11111111 11111111 11111111 11111111 11111111 11111111
-		//                   & data
-		//                 =   62 bits of the right most bit
 		UINT64 readNumber = data & 0X3FFFFFFFFFFFFFFF;
-		// The most significant 2 bits are used to store the orientation.
 		UINT64 orient = data >> 62;
-        // Orientation 0 or 1 means that we took the forward string of the read. Otherwise we took the reverse string of the read.
+        // Ted: clear cases
 		string str = (orient == 0 || orient == 1) ? dataSet->getReadFromID(readNumber)->getStringForward() : dataSet->getReadFromID(readNumber)->getStringReverse();
-		// Orientation 0 or 2 means that we took the prefix of the string. Otherwise we took the suffix of the read.
 		string subStr = (orient == 0 || orient == 2) ? str.substr(0,hashStringLength) : str.substr(str.length() - hashStringLength, hashStringLength);
 		if(subStr == subString)
 				break;
@@ -206,7 +199,7 @@ bool HashTable::insertIntoTable(const Read *read, const string & subString, cons
 /**********************************************************************************************************************
 	Returns a list of read containing the subString as prefix or suffix.
 **********************************************************************************************************************/
-vector<UINT64> * HashTable::getListOfReads(const string & subString) const
+vector<UINT64> * HashTable::getListOfReads(string subString)
 {
 
 		UINT64 index = hashFunction(subString);	// Get the index using the hash function.

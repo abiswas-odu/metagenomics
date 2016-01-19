@@ -29,7 +29,6 @@ Dataset::Dataset(void)
 	minimumOverlapLength = 0;
 	shortestReadLength = 0XFFFFFFFFFFFFFFFF;
 	longestReadLength = 0X0000000000000000;
-	reads = new vector<Read *>;
 
 }
 
@@ -39,7 +38,6 @@ Dataset::Dataset(void)
 **********************************************************************************************************************/
 Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFileNames, UINT64 minOverlap)
 {
-	CLOCKSTART;
 	// Initialize the variables.
 	numberOfUniqueReads = 0;
 	numberOfReads = 0;
@@ -47,7 +45,6 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 	longestReadLength = 0X0000000000000000;
 	reads = new vector<Read *>;
 	pairedEndDatasetFileNames = pairedEndFileNames;
-	numberOfPairedDatasets = pairedEndDatasetFileNames.size();
 	singleEndDatasetFileNames = singleEndFileNames;
 	minimumOverlapLength = minOverlap;
 	UINT64 counter = 0;
@@ -65,7 +62,6 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 	cout << " Longest read length in all datasets: " << setw(5) << longestReadLength <<endl;;
 	sortReads();
 	removeDupicateReads();								// Remove duplicated reads for the dataset.
-	CLOCKSTOP;
 }
 
 
@@ -295,8 +291,8 @@ bool Dataset::storeMatePairInformation(string fileName, UINT64 minOverlap, UINT6
 			orient1 = read1Froward.find(line1) != string::npos ? 1 : 0;
 			orient2 = read2Froward.find(line2) != string::npos ? 1 : 0;
 
-			r1->addMatePair(r2->getReadNumber(), orient1 * 2 + orient2, datasetNumber); 	// Two bits are used to represent the orientation of the reads in a matepair.
-			r2->addMatePair(r1->getReadNumber(), orient1 + orient2 * 2, datasetNumber);	// 0 = 00 means the reverse of r1 and the reverse of r2 are matepairs.
+			r1->addMatePair(r2, orient1 * 2 + orient2, datasetNumber); 	// Two bits are used to represent the orientation of the reads in a matepair.
+			r2->addMatePair(r1, orient1 + orient2 * 2, datasetNumber);	// 0 = 00 means the reverse of r1 and the reverse of r2 are matepairs.
 																		// 1 = 01 means the reverse of r1 and the forward of r2 are matepairs.
 																		// 2 = 10 means the forward of r1 and the reverse of r2 are matepairs.
 																		// 3 = 11 means the forward of r1 and the forward of r2 are matepairs.

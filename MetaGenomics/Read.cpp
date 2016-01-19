@@ -129,9 +129,9 @@ string Read::reverseComplement(const string & read)
 /**********************************************************************************************************************
 	This function adds a matpair
 **********************************************************************************************************************/
-bool Read::addMatePair(UINT64 read, UINT8 orientation, UINT64 datasetNumber)
+bool Read::addMatePair(Read *r, UINT8 orientation, UINT64 datasetNumber)
 {
-	UINT64 ID = read, i;
+	UINT64 ID = r->getReadNumber(), i;
 	if(matePairList->empty()) 							//matePairList is empty.
 	{
 		MPlist newMP;

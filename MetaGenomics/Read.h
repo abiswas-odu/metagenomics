@@ -13,22 +13,15 @@
 
 class Edge;
 
-// Ted: SVN test
 struct MPlist
 {
-	UINT64 matePairID;				// the ID of the matepair of the current read.
-									// We use a vector of MPlist to store all the matepairs.
+	UINT64 matePairID;				// This list stores the list of ID's of the matepairs of the current read.
 	UINT8 matePairOrientation; 		// List of mate pair orientation.
 									// 0 = 00 means the reverse of this read and the reverse of the second read are matepairs.
 									// 1 = 01 means the reverse of this read and the forward of the second read are matepairs.
 									// 2 = 10 means the forward of this read and the reverse of the second read are matepairs.
 									// 3 = 11 means the forward of this read and the forward of the second read are matepairs.
-									// paired reads are in forward - reverse orientation on different DNA strands, example:
-									// TAT------------
-									// ------------CAG
-									// But the lexicographically smaller sequence of the read is stored, so the orientation of the matepair is lost and should be stored here
 	UINT8 datasetNumber;			//Dataset number.
-									// CP: different datasets have different insert sizes
 };
 
 /**********************************************************************************************************************
@@ -40,14 +33,10 @@ class Read
 	private:
 		UINT64 readNumber; 						// Unique Identification of the read.
 		string read; 							// String representation of the read.
-		// CP: Is readReverse stored in memory for every read? Why can't this be calculated on the flight to save memory?
-		// BH: We need to find reverse complement of the reads in many places. That's whey I computed them once and saved them.
 		string readReverse;
 		UINT32 frequency; 						// Frequency of the read. Number of times this read is present in the dataset. Used in some statistical analysis.
-		vector<MPlist> *matePairList;			// will contain the matepair of contained reads assigned to self
-		// listOfEdgesForward and locationOnEdgeReverse stores the list of forward version and reverse version of the same set of edges
+		vector<MPlist> *matePairList;
 		vector<Edge *> *listOfEdgesForward;   	// List of edges that contain the forward string of this read.
-		// BH: Location is the distance from the source read on the edge to the beginning of this read.
 		vector<UINT64> *locationOnEdgeForward;	// List of locations on the edges that contain the forward string of the current read.
 		vector<Edge *> *listOfEdgesReverse;		// List of edges that contain the reverse string of this read.
 		vector<UINT64> *locationOnEdgeReverse;	// List of locations on the edges that contain the reverse string of the current read.
@@ -55,8 +44,6 @@ class Read
 		string reverseComplement(const string & read);
 
 	public:
-		// CP: can the two variables be removed?
-		// BH: We used this variables in resolved Node function. Later we might want to use it in other functions. That's why I did not remove them.
 		UINT64 coverageDepth;					// Estimated depth of coverage.  --> Not use anymore
 		UINT64 locationInDataset;				// Not for debugging only. Will be removed.  --> Not use anymore
 		bool isContainedRead;
@@ -70,17 +57,17 @@ class Read
 		bool setReadNumber(UINT64 id); 			// Set the read number.
 		bool setFrequency(UINT32 freq);			// Set the ferquency of the read.
 
-		string getStringForward(void) const {return read;} 									// Get the forward string of the current read.
-		string getStringReverse(void) const {return readReverse;} 								// Get the reverse string of the current read.
-		UINT16 getReadLength(void) const {return read.length();} 								// Get the length of the string in the current read.
-		UINT64 getReadNumber(void) const {return readNumber;} 								// Get the read number of the current read.
-		UINT32 getFrequency(void) const {return frequency;}									// Get the frequency of the current read.
-		vector<MPlist> * getMatePairList(void) const {return matePairList;} 					// Get the list of matepairs.
-		vector<Edge *> * getListOfEdgesForward(void) const {return listOfEdgesForward;}		// Get the list of edges that contain the forward string of the current read.
-		vector<UINT64> * getLocationOnEdgeForward(void) const {return locationOnEdgeForward;}	// Get the list of locations on the edges that contain the forward string of the current read.
-		vector<Edge *> * getListOfEdgesReverse(void) const {return listOfEdgesReverse;}		// Get the list of edges that contain the reverse string of the current read.
-		vector<UINT64> * getLocationOnEdgeReverse(void) const {return locationOnEdgeReverse;}	// Get the list of locations on the edges that contain the reverse string of the current read.
-		bool addMatePair(UINT64 read, UINT8 orientation, UINT64 datasetNumber);				// Add a matepair in the list.
+		string getStringForward(void){return read;} 									// Get the forward string of the current read.
+		string getStringReverse(void){return readReverse;} 								// Get the reverse string of the current read.
+		UINT16 getReadLength(void){return read.length();} 								// Get the length of the string in the current read.
+		UINT64 getReadNumber(void) {return readNumber;} 								// Get the read number of the current read.
+		UINT32 getFrequency(void) {return frequency;}									// Get the frequency of the current read.
+		vector<MPlist> * getMatePairList(void) {return matePairList;} 					// Get the list of matepairs.
+		vector<Edge *> * getListOfEdgesForward(void){return listOfEdgesForward;}		// Get the list of edges that contain the forward string of the current read.
+		vector<UINT64> * getLocationOnEdgeForward(void){return locationOnEdgeForward;}	// Get the list of locations on the edges that contain the forward string of the current read.
+		vector<Edge *> * getListOfEdgesReverse(void){return listOfEdgesReverse;}		// Get the list of edges that contain the reverse string of the current read.
+		vector<UINT64> * getLocationOnEdgeReverse(void){return locationOnEdgeReverse;}	// Get the list of locations on the edges that contain the reverse string of the current read.
+		bool addMatePair(Read *r, UINT8 orientation, UINT64 datasetNumber);				// Add a matepair in the list.
 
 };
 
