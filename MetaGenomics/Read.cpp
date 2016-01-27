@@ -30,7 +30,7 @@ Read::Read(void)
 	locationOnEdgeForward->resize(locationOnEdgeForward->size());	// Resize to 0 to reduce space.
 	locationOnEdgeReverse = new vector<UINT64>;
 	locationOnEdgeReverse->resize(locationOnEdgeReverse->size());	// Resize to 0 to reduce space.
-
+	read = new dna_bitset();
 }
 
 /**********************************************************************************************************************
@@ -39,6 +39,8 @@ Read::Read(void)
 Read::Read(const string & s)
 {
 	// Initialize the variables.
+	read = new dna_bitset(s.c_str(), s.length());
+	setFrequency(1);
 	readNumber = 0;
 	frequency = 0;
 	isContainedRead = false;
@@ -53,7 +55,6 @@ Read::Read(const string & s)
 	locationOnEdgeForward->resize(locationOnEdgeForward->size());	// Resize to 0 to reduce space.
 	locationOnEdgeReverse = new vector<UINT64>;
 	locationOnEdgeReverse->resize(locationOnEdgeReverse->size());	// Resize to 0 to reduce space.
-	setRead(s);
 }
 
 /**********************************************************************************************************************
@@ -67,6 +68,7 @@ Read::~Read(void)
 	delete listOfEdgesReverse;
 	delete locationOnEdgeForward;
 	delete locationOnEdgeReverse;
+
 }
 
 /**********************************************************************************************************************
@@ -75,13 +77,13 @@ Read::~Read(void)
 bool Read::setRead(const string & s)
 {
 	// Ted: if(s.length() < 10) MYEXIT("Length of string less than 10.");	// Reads must be at least 10 bases in length.  --> not need anymore
-	setFrequency(1);												// Set the frequency to 1.
-	read = s;														// Store the string.
-	readReverse = reverseComplement(s);
+	setFrequency(1);									// Set the frequency to 1.
+	dna_bitset *tmpRead = new dna_bitset(s.c_str(), s.length());
+	delete read;
+	read=NULL;
+	read = tmpRead;
 	return true;
 }
-
-
 /**********************************************************************************************************************
 	This function assigns an ID to the read.
 **********************************************************************************************************************/
@@ -91,9 +93,6 @@ bool Read::setReadNumber(UINT64 id)
 	readNumber = id;												// Set the read number.
 	return true;
 }
-
-
-
 
 
 /**********************************************************************************************************************
@@ -106,26 +105,12 @@ bool Read::setFrequency(UINT32 freq)
 	return true;
 }
 
-
-
-
 /**********************************************************************************************************************
 	Returns the reverse complement of a read.
 **********************************************************************************************************************/
-string Read::reverseComplement(const string & read)
-{
-	UINT64 stringLength = read.length();
-	string reverse(stringLength,'0');
-	for(UINT64 i = 0;i < stringLength; i++)						// Then complement the string. Change A to T, C to G, G to C and T to A.
-	{
-		if( read[i] & 0X02 ) // C or G
-			reverse.at(stringLength -  i - 1 ) = read[i] ^ 0X04;
-		else // A <==> T
-			reverse.at(stringLength -  i - 1 ) = read[i] ^ 0X15;
-	}
-	return reverse; // return the reverse complement as a string
+string Read::reverseComplement() const {
+	return read->toRevComplement();
 }
-
 /**********************************************************************************************************************
 	This function adds a matpair
 **********************************************************************************************************************/

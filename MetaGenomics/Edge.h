@@ -35,10 +35,11 @@ class Edge{
 												// Edge (u,v) is present in the list of edges of node u
 												// Edge (v,u) is present in the list of edges of node v.
 												// Edge (u,v) and (v,u) are called twin edge and are reverse of one another.
-
+		INT64 edgeID;
 
 	public:
 		bool transitiveRemovalFlag;							// Used to mark transitive edges.
+		bool hignCoverageAndMatepairFlag;
 		UINT16 flow;							// Store the flow in the current edge.
 		UINT64 coverageDepth;					// Estimated depth of coverage.
 		UINT64 SD;
@@ -57,7 +58,9 @@ class Edge{
 		vector<UINT64> * getListOfReads() {return listOfReads;}		// Get the ordered list of reads in the current edge.
 		vector<UINT16> * getListOfOverlapOffsets() {return listOfOverlapOffsets;} // Get the list of ordered offset.
 		vector<UINT8> * getListOfOrientations() {return listOfOrientations;}	// Get the ordered orientation of the reads. 1 means forward. 0 means reverse.
-		Edge * getReverseEdge() {return reverseEdge;}	// Return the pointer to the reverse edge.
+		Edge * getReverseEdge() const {return reverseEdge;}	// Return the pointer to the reverse edge.
+		void setEdgeID(UINT64 n) {edgeID = n;}
+		INT64 getEdgeID (void) {return edgeID;}
 };
 
 #endif /* EDGE_H_ */

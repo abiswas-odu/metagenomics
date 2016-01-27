@@ -3,6 +3,7 @@
  *
  * Created on: April 22, 2013
  * Author: Md. Bahlul Haider
+ * Author: Abhishek Biswas
  */
 
 #include "Common.h"
@@ -69,8 +70,10 @@ OverlapGraph::OverlapGraph(void)
 
 
 /**********************************************************************************************************************
-	Another Constructor. Build the overlap grpah using the hash table.
-**********************************************************************************************************************/
+	Another Constructor. Build the overlap graph using the hash table.
+BNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMM
+
+UYTREWQ**********************************************************************************************************************/
 OverlapGraph::OverlapGraph(HashTable *ht)
 {
 	// Initialize the variables.
@@ -114,99 +117,144 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht)
 	hashTable = ht;
 	dataSet = ht->getDataset();
 	UINT64 counter = 0;
-	vector<nodeType> *exploredReads = new vector<nodeType>;
-	exploredReads->reserve(dataSet->getNumberOfUniqueReads()+1);
-
-	vector<UINT64> * queue = new vector<UINT64>;
-	queue->reserve(dataSet->getNumberOfUniqueReads()+1);
-
-	vector<markType> *markedNodes = new vector<markType>;
-	markedNodes->reserve(dataSet->getNumberOfUniqueReads()+1);
-
-	graph = new vector< vector<Edge *> * >;
-	graph->reserve(dataSet->getNumberOfUniqueReads()+1);
-
-
-
-	for(UINT64 i = 0; i <= dataSet->getNumberOfUniqueReads(); i++) // Initialization
-	{
-		vector<Edge *> *newList = new vector<Edge *>;
-		graph->push_back(newList);
-		exploredReads->push_back(UNEXPLORED);
-		queue->push_back(0);
-		markedNodes->push_back(VACANT);
-	}
 
 	markContainedReads();
 
-	this->dataSet->readMatePairsFromFile();
+	//this->dataSet->readMatePairsFromFile();				//Read later not required now.
 
-	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++)
+	vector<UINT64> * allMarked = new vector<UINT64>;
+	allMarked->reserve(dataSet->getNumberOfUniqueReads());
+
+	for(UINT64 i = 0; i < dataSet->getNumberOfUniqueReads(); i++) // Initialization
 	{
-		if(exploredReads->at(i) == UNEXPLORED)
+		allMarked->push_back(0);
+	}
+	#pragma omp parallel num_threads(THREAD_COUNT)
+	{
+		UINT64 startReadID,prevReadID;
+		int makedNodes=0;
+		#pragma omp critical(assignRandomStart)    //Set initial start points...
 		{
-			UINT64 start = 0, end = 0; 											// Initialize queue start and end.
-			queue->at(end++) = i;
-			while(start < end) 													// This loop will explore all connected component starting from read i.
+			for(UINT64 i=0;i<allMarked->size();i++)
 			{
-				counter++;
-				UINT64 read1 = queue->at(start++);
-				if(exploredReads->at(read1) == UNEXPLORED)
+				if(allMarked->at(i)==0)
 				{
-					insertAllEdgesOfRead(read1, exploredReads);					// Explore current node.
-					exploredReads->at(read1) = EXPLORED;
+					startReadID=prevReadID=i;
+					allMarked->at(i)=1;
+					break;
 				}
-				if(graph->at(read1)->size() != 0) 								// Read has some edges (required only for the first read when a new queue starts.
+			}
+		}
+		while(startReadID!=-1) // Loop till all nodes marked
+		{
+			map<UINT64,nodeType> *exploredReads = new map<UINT64,nodeType>;							//Record of nodes processed
+			vector<UINT64> *queue = new vector<UINT64>;												//Queue
+			map<UINT64, vector<Edge*> * > *parGraph = new map<UINT64, vector<Edge*> * >;			//Partial graph
+
+			vector<Edge *> *newList = new vector<Edge *>;
+			parGraph->insert( std::pair<UINT64, vector<Edge*> * >(startReadID, newList)); // Insert start node
+			if(exploredReads->find(startReadID) ==  exploredReads->end()) //if node is UNEXPLORED
+			{
+				UINT64 start = 0, end = 0; 											// Initialize queue start and end.
+				queue->at(end++) = startReadID;
+				while(start < end) 													// This loop will explore all connected component starting from read startReadID.
 				{
-					if(exploredReads->at(read1) == EXPLORED) 					// Explore unexplored neighbors first.
+					UINT64 read1 = queue->at(start++);
+					bool isPrevMarked=false;
+					#pragma omp critical(assignRandomStart)
 					{
-						for(UINT64 index1 = 0; index1 < graph->at(read1)->size(); index1++ )
-						{
-							UINT64 read2 = graph->at(read1)->at(index1)->getDestinationRead()->getReadNumber();
-							if(exploredReads->at(read2) == UNEXPLORED) 			// Not explored.
-							{
-								queue->at(end++) = read2; 						// Put in the queue.
-								insertAllEdgesOfRead(read2, exploredReads);
-								exploredReads->at(read2) = EXPLORED;
-							}
-						}
-						markTransitiveEdges(read1, markedNodes); // Mark transitive edges
-						exploredReads->at(read1) = EXPLORED_AND_TRANSITIVE_EDGES_MARKED;
+						if(allMarked->at(read1)==0)
+							allMarked->at(read1)=1;
+						else
+							isPrevMarked=true;
 					}
-					if(exploredReads->at(read1) == EXPLORED_AND_TRANSITIVE_EDGES_MARKED)
+
+					if(!isPrevMarked || read1==startReadID)
 					{
-						for(UINT64 index1 = 0; index1 < graph->at(read1)->size(); index1++) 				// Then explore all neighbour's neighbors
+						if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
 						{
-							UINT64 read2 = graph->at(read1)->at(index1)->getDestinationRead()->getReadNumber();
-							if(exploredReads->at(read2) == EXPLORED)
+							insertAllEdgesOfRead(read1, exploredReads, parGraph);					// Explore current node.
+							exploredReads->insert( std::pair<UINT64,nodeType>(read1,EXPLORED) );
+						}
+						if(parGraph->at(read1)->size() != 0) 								// Read has some edges (required only for the first read when a new queue starts.
+						{
+							if(exploredReads->at(read1) == EXPLORED) 					// Explore unexplored neighbors first.
 							{
-								for(UINT64 index2 = 0; index2 < graph->at(read2)->size(); index2++) 		// Explore all neighbors neighbors
+								for(UINT64 index1 = 0; index1 < parGraph->at(read1)->size(); index1++ )
 								{
-									UINT64 read3 = graph->at(read2)->at(index2)->getDestinationRead()->getReadNumber();
-									if(exploredReads->at(read3) == UNEXPLORED) 				// Not explored
+									UINT64 read2 = parGraph->at(read1)->at(index1)->getDestinationRead()->getReadNumber();
+									if(exploredReads->at(read2) == UNEXPLORED) 			// Not explored.
 									{
-										queue->at(end++) = read3; 					// Put in the queue
-										insertAllEdgesOfRead(read3, exploredReads);
-										exploredReads->at(read3) = EXPLORED;
+										queue->at(end++) = read2; 						// Put in the queue.
+										insertAllEdgesOfRead(read2, exploredReads, parGraph);
+										exploredReads->at(read2) = EXPLORED;
 									}
 								}
-								markTransitiveEdges(read2, markedNodes); // Mark transitive edge
-								exploredReads->at(read2) = EXPLORED_AND_TRANSITIVE_EDGES_MARKED;
+								markTransitiveEdges(read1, parGraph); // Mark transitive edges
+								exploredReads->at(read1) = EXPLORED_AND_TRANSITIVE_EDGES_MARKED;
+							}
+							if(exploredReads->at(read1) == EXPLORED_AND_TRANSITIVE_EDGES_MARKED)
+							{
+								for(UINT64 index1 = 0; index1 < parGraph->at(read1)->size(); index1++) 				// Then explore all neighbour's neighbors
+								{
+									UINT64 read2 = parGraph->at(read1)->at(index1)->getDestinationRead()->getReadNumber();
+									if(exploredReads->at(read2) == EXPLORED)
+									{
+										for(UINT64 index2 = 0; index2 < parGraph->at(read2)->size(); index2++) 		// Explore all neighbors neighbors
+										{
+											UINT64 read3 = parGraph->at(read2)->at(index2)->getDestinationRead()->getReadNumber();
+											if(exploredReads->at(read3) == UNEXPLORED) 				// Not explored
+											{
+												queue->at(end++) = read3; 					// Put in the queue
+												insertAllEdgesOfRead(read3, exploredReads, parGraph);
+												exploredReads->at(read3) = EXPLORED;
+											}
+										}
+										markTransitiveEdges(read2, parGraph); // Mark transitive edge
+										exploredReads->at(read2) = EXPLORED_AND_TRANSITIVE_EDGES_MARKED;
+									}
+								}
+								removeTransitiveEdges(read1); // Remove the transitive edges
+								exploredReads->at(read1) = EXPLORED_AND_TRANSITIVE_EDGES_REMOVED;
+								makedNodes++;
 							}
 						}
-						removeTransitiveEdges(read1); // Remove the transitive edges
+					}
+					if(makedNodes>MAX_PAR_GRAPH_SIZE)
+					{
+						int threadID = omp_get_thread_num();
+						saveParGraphToFile(threadID + "_parGraph.txt" , exploredReads, parGraph);
 					}
 				}
-				if(counter%100000==0)	// Show the progress.
-					cout<<"counter: " << setw(10) << counter << " Nodes: " << setw(10) << numberOfNodes << " Edges: " << setw(10) << numberOfEdges/2 << endl;
+			}
+			int threadID = omp_get_thread_num();
+			saveParGraphToFile(threadID + "_parGraph.txt" , exploredReads, parGraph);
+			for(UINT64 i = 0; i < parGraph->size(); i++)
+			{
+				for(UINT64 j = 0; j< parGraph->at(i)->size(); j++)
+				{
+					delete parGraph->at(i)->at(j);
+				}
+				delete parGraph->at(i);
+			}
+			delete parGraph;
+			delete exploredReads;
+			delete queue;
+			startReadID=-1;
+			#pragma omp critical(assignRandomStart)
+			{
+				for(UINT64 i=prevReadID;i<allMarked->size();i++)
+				{
+					if(allMarked->at(i)==0){
+						startReadID=prevReadID=i;
+						allMarked->at(i)=1;
+						break;
+					}
+				}
 			}
 		}
 	}
-	cout<<"counter: " << setw(10) << counter << " Nodes: " << setw(10) << numberOfNodes << " Edges: " << setw(10) << numberOfEdges/2 << endl;
 
-	delete exploredReads;
-	delete queue;
-	delete markedNodes;
 	delete hashTable;	// Do not need the hash table any more.
 	do
 	{
@@ -232,12 +280,12 @@ void OverlapGraph::markContainedReads(void)
 		return;
 	}
 	UINT64 counter = 0;
-	for(UINT64 i = 1; i < graph->size(); i++) // For each read
+	for(UINT64 i = 0; i < dataSet->getNumberOfUniqueReads(); i++) // For each read
 	{
 		Read *read1 = dataSet->getReadFromID(i); // Get the read
 		string readString = read1->getStringForward(); // Get the forward of the read
 		string subString;
-		for(UINT64 j = 1; j < read1->getReadLength() - hashTable->getHashStringLength(); j++) // fGr each substring of read1 of length getHashStringLength
+		for(UINT64 j = 0; j < read1->getReadLength() - hashTable->getHashStringLength(); j++) // fGr each substring of read1 of length getHashStringLength
 		{
 			subString = readString.substr(j,hashTable->getHashStringLength()); // Get the substring from read1
 			vector<UINT64> * listOfReads=hashTable->getListOfReads(subString); // Search the substring in the hash table
@@ -256,7 +304,7 @@ void OverlapGraph::markContainedReads(void)
 					if(readString.length() > read2->getStringForward().length() && checkOverlapForContainedRead(read1,read2,(data >> 62),j)) // read1 need to be longer than read2 in order to contain read2
 																																			 // Check if the remaining of the strings also match
 					{
-						if(read2->superReadID == 0) // This is the rist super read found. we store the ID of the super read.
+						if(read2->superReadID == 0) // This is the first super read found. we store the ID of the super read.
 						{
 							read2->superReadID = i;
 							counter ++;
@@ -276,7 +324,7 @@ void OverlapGraph::markContainedReads(void)
 
 	// Get some statistics
 	UINT64 containedReads = 0, nonContainedReads = 0;
-	for(UINT64 i = 1; i < graph->size(); i++)
+	for(UINT64 i = 0; i < dataSet->getNumberOfUniqueReads(); i++)
 	{
 		Read *rr = dataSet->getReadFromID(i);
 		if(rr->superReadID == 0) // Count the number of reads that are not contained by some other reads.
@@ -292,7 +340,7 @@ void OverlapGraph::markContainedReads(void)
 
 /**********************************************************************************************************************
 	Hash table search found that a proper substring of read1 is a prefix or suffix of read2 or reverse complement of
-	read2 (depents on the orient).
+	read2 (dependents on the orient).
 	orient 0 means prefix of forward of the read2
 	orient 1 means suffix of forward of the read2
 	orient 2 means prefix of reverse of the read2
@@ -387,9 +435,23 @@ bool OverlapGraph::checkOverlap(Read *read1, Read *read2, UINT64 orient, UINT64 
 /**********************************************************************************************************************
 	Insert an edge in the overlap graph.
 **********************************************************************************************************************/
-bool OverlapGraph::insertEdge(Edge * edge)
+bool OverlapGraph::insertEdge(Edge * edge, map<UINT64, vector<Edge*> * > *parGraph)
 {
 
+	UINT64 ID = edge->getSourceRead()->getReadNumber(); // This is the source read.
+	if(parGraph->find(ID) == parGraph->end()){ 			// If there is no edge incident to the node
+		vector<Edge *> *newList = new vector<Edge *>;
+		parGraph->insert( std::pair<UINT64, vector<Edge*> * >(ID, newList));
+		numberOfNodes++;								// Then a new node is inserted in the graph. Number of nodes increased.
+	}
+	parGraph->at(ID)->push_back(edge);						// Insert the edge in the list of edges of ID
+		numberOfEdges++;								// Increase the number of edges.
+	updateReadLocations(edge);							// If the current edge contains some reads, then we need to update their location information.
+	return true;
+}
+
+bool OverlapGraph::insertEdge(Edge * edge)
+{
 	UINT64 ID = edge->getSourceRead()->getReadNumber(); // This is the source read.
 	if(graph->at(ID)->empty()) 							// If there is no edge incident to the node
 		numberOfNodes++;								// Then a new node is inserted in the graph. Number of nodes increased.
@@ -404,7 +466,7 @@ bool OverlapGraph::insertEdge(Edge * edge)
 /**********************************************************************************************************************
 	Insert an edge in the graph.
 **********************************************************************************************************************/
-bool OverlapGraph::insertEdge(Read *read1, Read *read2, UINT8 orient, UINT16 overlapOffset)
+bool OverlapGraph::insertEdge(Read *read1, Read *read2, UINT8 orient, UINT16 overlapOffset, map<UINT64, vector<Edge*> * > *parGraph)
 {
 	Edge * edge1 = new Edge(read1,read2,orient,overlapOffset);								// Create a new edge in the graph to insert.
 	UINT16 overlapOffsetReverse = read2->getReadLength() + overlapOffset - read1->getReadLength();	// Set the overlap offset accordingly for the reverse edge. Note that read lengths are different.
@@ -413,8 +475,8 @@ bool OverlapGraph::insertEdge(Read *read1, Read *read2, UINT8 orient, UINT16 ove
 
 	edge1->setReverseEdge(edge2);		// Set the reverse edge pointer.
 	edge2->setReverseEdge(edge1);		// Set the reverse edge pinter.
-	insertEdge(edge1);					// Insert the edge in the overlap graph.
-	insertEdge(edge2);					// Insert the edge in the overlap graph.
+	insertEdge(edge1, parGraph);					// Insert the edge in the overlap graph.
+	insertEdge(edge2, parGraph);					// Insert the edge in the overlap graph.
 	return true;
 }
 
@@ -526,7 +588,7 @@ bool OverlapGraph::printGraph(string graphFileName, string contigFileName)
 /**********************************************************************************************************************
 	Insert all edges of a read in the overlap graph
 **********************************************************************************************************************/
-bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, vector<nodeType> * exploredReads)
+bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> * exploredReads, map<UINT64, vector<Edge*> * > *parGraph)
 {
 	Read *read1 = dataSet->getReadFromID(readNumber); 	// Get the current read read1.
 	string readString = read1->getStringForward(); 		// Get the forward string of read1.
@@ -543,8 +605,9 @@ bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, vector<nodeType> * ex
 				UINT16 overlapOffset;
 				UINT8 orientation;
 				Read *read2 = dataSet->getReadFromID(data & 0X3FFFFFFFFFFFFFFF); 	// Least significant 62 bits store the read number.
-				if(exploredReads->at(read2->getReadNumber())!= UNEXPLORED) 			// No need to discover the same edge again. All edges of read2 is already inserted in the graph.
-						continue;
+				if(exploredReads->find(read2->getReadNumber()) !=  exploredReads->end())
+					continue;                                                       // No need to discover the same edge again. All edges of read2 is already inserted in the graph.
+
 				if(read1->superReadID == 0 && read2->superReadID == 0 && checkOverlap(read1,read2,(data >> 62),j)) // Both read need to be non contained.
 				{
 					switch (data >> 62) // Most significant 2 bit represents  00 - prefix forward, 01 - suffix forward, 10 -  prefix reverse, 11 -  suffix reverse.
@@ -554,13 +617,13 @@ bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, vector<nodeType> * ex
 						case 2: orientation = 2; overlapOffset = read1->getReadLength() - j; break; 				// 2 = r1>-------<r2
 						case 3: orientation = 1; overlapOffset = hashTable->getHashStringLength() + j; break; 		// 1 = r2<------->r2
 					}
-					insertEdge(read1,read2,orientation,read1->getStringForward().length()-overlapOffset); 			// Insert the edge in the graph.
+					insertEdge(read1,read2,orientation,read1->getStringForward().length()-overlapOffset, parGraph); 			// Insert the edge in the graph.
 				}
 			}
 		}
 	}
-	if(graph->at(readNumber)->size() != 0)
-		sort(graph->at(readNumber)->begin(),graph->at(readNumber)->end(), compareEdges); // Sort the list of edges of the current node according to the overlap offset (ascending).
+	if(parGraph->at(readNumber)->size() != 0)
+		sort(parGraph->at(readNumber)->begin(),parGraph->at(readNumber)->end(), compareEdges); // Sort the list of edges of the current node according to the overlap offset (ascending).
 	return true;
 }
 
@@ -571,25 +634,24 @@ bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, vector<nodeType> * ex
 	Mark all the transitive edges of a read.
 	For Details: E.W. Myers. The fragment assembly string graph. Bioinformatics, 21(suppl 2):ii79-ii85, 2005.
 **********************************************************************************************************************/
-bool OverlapGraph::markTransitiveEdges(UINT64 readNumber, vector<markType> * markedNodes)
+bool OverlapGraph::markTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph)
 {
-
-	for(UINT64 i = 0; i < graph->at(readNumber)->size(); i++) // Mark all the neighbours of the current read as INPLAY
-		markedNodes->at(graph->at(readNumber)->at(i)->getDestinationRead()->getReadNumber()) = INPLAY; // Inplay
-
-	for(UINT64 i = 0; i < graph->at(readNumber)->size(); i++) // Traverse through the list of edges according to their overlap offset.
+	map<UINT64,markType> *markedNodes;
+	for(UINT64 i = 0; i < parGraph->at(readNumber)->size(); i++){ // Mark all the neighbors of the current read as INPLAY
+		markedNodes->insert(std::pair<UINT64,markType>(parGraph->at(readNumber)->at(i)->getDestinationRead()->getReadNumber(), INPLAY));
+	}
+	for(UINT64 i = 0; i < parGraph->at(readNumber)->size(); i++) // Traverse through the list of edges according to their overlap offset.
 	{
-		UINT64 read2 = graph->at(readNumber)->at(i)->getDestinationRead()->getReadNumber(); // For each neighbor
+		UINT64 read2 = parGraph->at(readNumber)->at(i)->getDestinationRead()->getReadNumber(); // For each neighbor
 		if(markedNodes->at(read2) == INPLAY) 										// If the neighbor is marked as INPLAY
 		{
-			for(UINT64 j = 0; j < graph->at(read2)->size(); j++)
+			for(UINT64 j = 0; j < parGraph->at(read2)->size(); j++)
 			{
-				UINT64 read3 = graph->at(read2)->at(j)->getDestinationRead()->getReadNumber(); // Get the neighbors neighbors
-				if(markedNodes->at(read3) == INPLAY)
+				UINT64 read3 = parGraph->at(read2)->at(j)->getDestinationRead()->getReadNumber(); // Get the neighbors neighbors
+				if(markedNodes->find(read3) != markedNodes->end() && markedNodes->at(read3) == INPLAY)
 				{
-
-					UINT8 type1 = graph->at(readNumber)->at(i)->getOrientation();
-					UINT8 type2 = graph->at(read2)->at(j)->getOrientation();
+					UINT8 type1 = parGraph->at(readNumber)->at(i)->getOrientation();
+					UINT8 type2 = parGraph->at(read2)->at(j)->getOrientation();
 					if((type1 == 0 ||  type1 == 2) && (type2==0 || type2==1)) 	// Check edge orientation
 						markedNodes->at(read3) = ELIMINATED; 					// Mark as ELIMINATED
 					else if((type1==1||type1==3) && (type2==2 || type2==3)) 	// Check edge orientation
@@ -598,19 +660,14 @@ bool OverlapGraph::markTransitiveEdges(UINT64 readNumber, vector<markType> * mar
 			}
 		}
 	}
-	for(UINT64 i = 0;i < graph->at(readNumber)->size(); i++)
+	for(UINT64 i = 0;i < parGraph->at(readNumber)->size(); i++)
 	{
-		if(markedNodes->at(graph->at(readNumber)->at(i)->getDestinationRead()->getReadNumber()) == ELIMINATED) // Current read to a node marked as ELIMINATED
+		if(markedNodes->at(parGraph->at(readNumber)->at(i)->getDestinationRead()->getReadNumber()) == ELIMINATED) // Current read to a node marked as ELIMINATED
 		{
-			graph->at(readNumber)->at(i)->transitiveRemovalFlag = true; 					// Mark this edge as transitive edge. Will remove this edge later.
-			graph->at(readNumber)->at(i)->getReverseEdge()->transitiveRemovalFlag = true;	// Mark also the reverse edge. Will remove this edge later.
+			parGraph->at(readNumber)->at(i)->transitiveRemovalFlag = true; 					// Mark this edge as transitive edge. Will remove this edge later.
+			parGraph->at(readNumber)->at(i)->getReverseEdge()->transitiveRemovalFlag = true;	// Mark also the reverse edge. Will remove this edge later.
 		}
 	}
-
-	for(UINT64 i = 0; i < graph->at(readNumber)->size(); i++)
-		markedNodes->at(graph->at(readNumber)->at(i)->getDestinationRead()->getReadNumber()) = VACANT; 	// Change back all the variables modified in this function to VACANT
-
-	markedNodes->at(readNumber) = VACANT; 		// Mark as vacant.
 	return true;
 }
 
@@ -1210,7 +1267,56 @@ bool OverlapGraph::calculateMeanAndSdOfInsertSize(void)
 	return true;
 }
 
+/**********************************************************************************************************************
+	Save the partial  graph in a text file
+**********************************************************************************************************************/
+bool OverlapGraph::saveParGraphToFile(string fileName, map<UINT64,nodeType> * exploredReads,map<UINT64, vector<Edge*> * > *parGraph)
+{
+	CLOCKSTART;
+	ofstream filePointer;
+	filePointer.open(fileName.c_str(), std::ios_base::app);
+	if(filePointer == NULL)
+		MYEXIT("Unable to open file: "+fileName);
 
+	vector<UINT64> *list = new vector<UINT64>;
+	for (map<UINT64, vector<Edge*> * >::iterator it=parGraph->begin(); it!=parGraph->end();)
+	{
+		UINT64 readID = it->first;
+		if(!it->second->empty() && exploredReads->at(readID) == EXPLORED_AND_TRANSITIVE_EDGES_REMOVED)
+		{
+			for(UINT64 j = 0; j < it->second->size(); j++)	// for each edge of the node
+			{
+				Edge * e = it->second->at(j);
+				UINT64 source = e->getSourceRead()->getReadNumber();
+				UINT64 destination = e->getDestinationRead()->getReadNumber();
+				if(source < destination || (source == destination && e < e->getReverseEdge()))
+				{
+					list->push_back(source);	// store the edge information first
+					list->push_back(destination);
+					list->push_back(e->getOrientation());
+					list->push_back(e->getOverlapOffset());
+					list->push_back(e->getListOfReads()->size());	// store the size of the vector of elements in the edge.
+					for(UINT64 k = 0; k < e->getListOfReads()->size(); k++)	// store information about the reads in the edge.
+					{
+						list->push_back(e->getListOfReads()->at(k));
+						list->push_back(e->getListOfOverlapOffsets()->at(k));
+						list->push_back(e->getListOfOrientations()->at(k));
+					}
+				}
+			}
+			parGraph->erase(it++);
+		}
+		else
+			++it;
+
+	}
+	for(UINT64 i = 0; i < list->size(); i++)	// store in a file for future use.
+		filePointer<<list->at(i)<<endl;
+	filePointer.close();
+	delete list;
+	CLOCKSTOP;
+	return true;
+}
 
 
 /**********************************************************************************************************************
@@ -2864,3 +2970,224 @@ UINT64 OverlapGraph::reduceLoops(void)
 	CLOCKSTOP;
 	return counter;
 }
+
+/**********************************************************************************************************************
+ 	 This functions returns a list of edges that might be joined to "edge"
+ 	 CP: For the input edge, find all the feasible edges that are linked with the input edge by a pair of edge-unique reads with appropriate distance
+ 	 CP: edge-unique reads are reads that are only present on one edge
+***********************************************************************************************************************/
+vector<Edge *> * OverlapGraph::getListOfFeasibleEdges(const Edge *edge)
+{
+
+	// We want to find if there are other edges that share matepairs. current edge (u,v) we check the matepairs near the node v. That's why we took the reverse edge.
+	// CP: why do you only check near v, not u?
+	// BH: Here we are checkin if we can merge (u,v) followed by another edge. That why we only take the reads near v.
+	// BH: At some point we will call this function with the reverse edge (v,u) as well. In that case we will look at the reads near vertex u.
+	Edge * rEdge=edge->getReverseEdge();
+	vector<Edge *> * feasibleListOfEdges = new vector<Edge *>;
+	UINT64 dist = 0;
+	for(UINT64 i = 0; i <rEdge->getListOfReads()->size(); i++) // for each read in the edge
+	{
+		// CP: dist is the distance from the beginning of rEdge to the beginning of this read.
+		dist+=rEdge->getListOfOverlapOffsets()->at(i);	// offset. We do not have to go much deeper. we need to make sure that we atleast go upto the longest insert size.
+		// CP: if this read is too far inside rEdge, then no need to go further inside. Stop and return the list
+		if(dist > 2*longestMeanOfInsertSize)	// longest insert size mean
+			 break;
+		// CP: retrieve the current read: r1
+		UINT64 mp1=rEdge->getListOfReads()->at(i); // mate pair 1
+		Read *r1 = dataSet->getReadFromID(mp1); // read1
+
+		if(r1->getListOfEdgesForward()->size() == 1) // only present in this current edge
+		{
+			// CP: r1 is a unique read that is present in this current edge only. Ignore non-unique reads
+			// CP: this for loop considers r1 and forward edges of r2: r1->.......r2->
+			for(UINT64 j = 0; j < r1->getMatePairList()->size(); j++) // for each matepair of current read1
+			{
+				// CP: r2 is the paired read of r1
+				UINT64 mp2 = r1->getMatePairList()->at(j).matePairID; // matepair 2
+				Read* r2 = dataSet->getReadFromID(mp2); // read2
+				UINT8 orient = r1->getMatePairList()->at(j).matePairOrientation;
+				vector<Edge *> *list;
+				vector<UINT64> *distOnEdge;
+				if(orient == 0  || orient == 2)
+				{
+					list = r2->getListOfEdgesForward(); // edge contain read forward
+					distOnEdge = r2->getLocationOnEdgeForward(); // location on the edge
+				}
+				else
+				{
+					list = r2->getListOfEdgesReverse(); // edge contain read forward
+					distOnEdge = r2->getLocationOnEdgeReverse(); // location on the edge
+
+				}
+				// CP: use read2 if it's on one and only one edge and it's not on the input forward/reverse edge and its distance is adequate
+				if(list->empty() || list->size() > 1 || list->at(0) == edge ||
+						list->at(0) == edge->getReverseEdge() || distOnEdge->at(0) > 2*longestMeanOfInsertSize)
+					// Must be present uniquly on the edge and withing the distance of longest insert size.
+					continue;
+				UINT64 k;
+				for(k = 0; k<feasibleListOfEdges->size();k++)		// add in the list of feasible edges. This list is expected to be small.
+				{
+					if(feasibleListOfEdges->at(k) == list->at(0))	// already in the list.
+						break;
+				}
+				if(k == feasibleListOfEdges->size())	// Not presnet in the list.
+				{
+					feasibleListOfEdges->push_back(list->at(0));	// insert the edge in the list.
+				}
+			}
+			// CP: this for loop considers r1 and reverse edges of r2: r1->.......r2<-
+			// CP: what if the same read are on a forward edge or another reverse edge? Is this read still unique?
+			/*for(UINT64 j = 0; j < r1->getMatePairList()->size(); j++)		// Same thing we do for the revese edges.
+			{
+				UINT64 mp2 = r1->getMatePairList()->at(j).matePairID;
+				Read* r2 = dataSet->getReadFromID(mp2);
+				vector<Edge *> *list = r2->getListOfEdgesReverse();
+				if(list->empty() || list->size() > 1 || list->at(0) == edge || list->at(0) == edge->getReverseEdge()
+						|| r2->getLocationOnEdgeReverse()->at(0) > 2*longestMeanOfInsertSize)
+					continue;
+				UINT64 k;
+				for(k = 0; k<feasibleListOfEdges->size();k++)
+				{
+					if(feasibleListOfEdges->at(k) == list->at(0))
+						break;
+				}
+				if(k == feasibleListOfEdges->size())
+				{
+					feasibleListOfEdges->push_back(list->at(0));
+				}
+			}*/
+		}
+	}
+
+	return feasibleListOfEdges;	// list of edges that might be joined with the current edge for scaffolding
+}
+
+
+UINT64 OverlapGraph::checkForScaffold(const Edge *edge1, const Edge *edge2, INT64 *averageGapDistance)
+{
+	UINT64 support = 0,dist = 0;
+	*averageGapDistance = 0;
+	Edge *rEdge1 = edge1->getReverseEdge();
+	vector<Edge *> *listRead1, *listRead2;		//  This is the lists of edges that contain read1 and read2
+	vector<UINT64> *locationOnEdgeRead1, *locationOnEdgeRead2;
+	// CP: listOfReads contains all the reads in the end section of edge1
+	vector<UINT64> listOfReads;
+	for(UINT64 i = 0; i <rEdge1->getListOfReads()->size(); i++)
+	{
+		dist+=rEdge1->getListOfOverlapOffsets()->at(i);
+		if(dist>2*longestMeanOfInsertSize)
+			 break;
+		listOfReads.push_back(rEdge1->getListOfReads()->at(i));
+	}
+	for(UINT64 i = 0; i < listOfReads.size(); i++)
+	{
+		Read *read1 = dataSet->getReadFromID(listOfReads.at(i));
+		for(UINT64 j = 0; j < read1->getMatePairList()->size(); j++)// For each matepair
+		{
+			Read *read2 = dataSet->getReadFromID(read1->getMatePairList()->at(j).matePairID);	// Get the read object of the matepair.
+			//if(read1->getReadNumber() > read2->getReadNumber()) // To avoid duplicate computation
+				//	continue;
+			UINT64 orient = read1->getMatePairList()->at(j).matePairOrientation;		// Get the matepair orientation
+			UINT64 datasetNumber = read1->getMatePairList()->at(j).datasetNumber;		// Get the dataset number
+
+			// 0 = 00 means the reverse of r1 and the reverse of r2 are matepairs.
+			// 1 = 01 means the reverse of r1 and the forward of r2 are matepairs.
+			// 2 = 10 means the forward of r1 and the reverse of r2 are matepairs.
+			// 3 = 11 means the forward of r1 and the forward of r2 are matepairs.
+			// To calculate distance of forward read, flip the read and get the location of the offset.
+			listRead1 = (orient == 0 || orient == 1) ? read1->getListOfEdgesForward() : read1->getListOfEdgesReverse();
+			locationOnEdgeRead1 = (orient == 0 || orient == 1) ? read1->getLocationOnEdgeForward() : read1->getLocationOnEdgeReverse();
+			// To calculate distance of reverse read, flip the read and get the location of the offset.
+			listRead2 = (orient == 0 || orient == 2) ? read2->getListOfEdgesForward() : read2->getListOfEdgesReverse();
+			locationOnEdgeRead2 = (orient == 0 || orient == 2) ? read2->getLocationOnEdgeForward() : read2->getLocationOnEdgeReverse();
+			// Only consider uniquely mapped reads and the distance is less than mean+3*SD
+			if( listRead1->size() == 1 && listRead2->size() == 1 && listRead1->at(0) == edge1->getReverseEdge()
+					&& listRead2->at(0) == edge2
+					&& locationOnEdgeRead1->at(0) + locationOnEdgeRead2->at(0) < (getMean(datasetNumber) + insertSizeRangeSD * getSD(datasetNumber)) )
+				// Both the reads are present on only on edge and the distance is less that mean+3*sd
+			{
+				dist = locationOnEdgeRead1->at(0) + locationOnEdgeRead2->at(0) + read1->getReadLength() ;
+				// if there are already in the same edge, don't do anything
+				if(listRead1->at(0) == listRead2->at(0) ||  listRead1->at(0) == listRead2->at(0)->getReverseEdge()) // Not on the same edge
+					continue;
+				*averageGapDistance += (INT64)((INT64)(getMean(datasetNumber))- (INT64)(dist));
+				support++;
+			}
+		}
+	}
+	if(support)
+		*averageGapDistance = (INT64)(*averageGapDistance/(INT64)(support));
+	return support;
+}
+
+
+
+/**********************************************************************************************************************
+ 	 Overloading the function checkForScaffold
+ 	 This function also retruns the paired end reads and their distances in the input vector pointers.
+***********************************************************************************************************************/
+
+UINT64 OverlapGraph::checkForScaffold(const Edge *edge1, const Edge *edge2, INT64 *averageGapDistance, vector<Read *> * pairedReadsInSource, vector <Read *> *pairedReadsInDestination, vector<INT64> *gapDistance)
+{
+	UINT64 support = 0,dist = 0;
+	*averageGapDistance = 0;
+	Edge *rEdge1 = edge1->getReverseEdge();
+	vector<Edge *> *listRead1, *listRead2;		//  This is the lists of edges that contain read1 and read2
+	vector<UINT64> *locationOnEdgeRead1, *locationOnEdgeRead2;
+	// CP: listOfReads contains all the reads in the end section of edge1
+	vector<UINT64> listOfReads;
+	for(UINT64 i = 0; i <rEdge1->getListOfReads()->size(); i++)
+	{
+		dist+=rEdge1->getListOfOverlapOffsets()->at(i);
+		if(dist>2*longestMeanOfInsertSize)
+			 break;
+		listOfReads.push_back(rEdge1->getListOfReads()->at(i));
+	}
+	for(UINT64 i = 0; i < listOfReads.size(); i++)
+	{
+		Read *read1 = dataSet->getReadFromID(listOfReads.at(i));
+		for(UINT64 j = 0; j < read1->getMatePairList()->size(); j++)// For each matepair
+		{
+			Read *read2 = dataSet->getReadFromID(read1->getMatePairList()->at(j).matePairID);	// Get the read object of the matepair.
+			//if(read1->getReadNumber() > read2->getReadNumber()) // To avoid duplicate computation
+				//	continue;
+			UINT64 orient = read1->getMatePairList()->at(j).matePairOrientation;		// Get the matepair orientation
+			UINT64 datasetNumber = read1->getMatePairList()->at(j).datasetNumber;		// Get the dataset number
+
+			// 0 = 00 means the reverse of r1 and the reverse of r2 are matepairs.
+			// 1 = 01 means the reverse of r1 and the forward of r2 are matepairs.
+			// 2 = 10 means the forward of r1 and the reverse of r2 are matepairs.
+			// 3 = 11 means the forward of r1 and the forward of r2 are matepairs.
+			// To calculate distance of forward read, flip the read and get the location of the offset.
+			listRead1 = (orient == 0 || orient == 1) ? read1->getListOfEdgesForward() : read1->getListOfEdgesReverse();
+			locationOnEdgeRead1 = (orient == 0 || orient == 1) ? read1->getLocationOnEdgeForward() : read1->getLocationOnEdgeReverse();
+			// To calculate distance of reverse read, flip the read and get the location of the offset.
+			listRead2 = (orient == 0 || orient == 2) ? read2->getListOfEdgesForward() : read2->getListOfEdgesReverse();
+			locationOnEdgeRead2 = (orient == 0 || orient == 2) ? read2->getLocationOnEdgeForward() : read2->getLocationOnEdgeReverse();
+			// Only consider uniquely mapped reads and the distance is less than mean+3*SD
+			if( listRead1->size() == 1 && listRead2->size() == 1 && listRead1->at(0) == edge1->getReverseEdge()
+					&& listRead2->at(0) == edge2
+					&& locationOnEdgeRead1->at(0) + locationOnEdgeRead2->at(0) < (getMean(datasetNumber) + insertSizeRangeSD * getSD(datasetNumber)) )
+				// Both the reads are present on only on edge and the distance is less that mean+3*sd
+			{
+				dist = locationOnEdgeRead1->at(0) + locationOnEdgeRead2->at(0) + read1->getReadLength() ;
+				// if there are already in the same edge, don't do anything
+				if(listRead1->at(0) == listRead2->at(0) ||  listRead1->at(0) == listRead2->at(0)->getReverseEdge()) // Not on the same edge
+					continue;
+				*averageGapDistance += (INT64)((INT64)(getMean(datasetNumber))- (INT64)(dist));
+				pairedReadsInSource->push_back(read1);
+				pairedReadsInDestination->push_back(read2);
+				gapDistance->push_back((INT64)((INT64)(getMean(datasetNumber))- (INT64)(dist)));
+				support++;
+			}
+		}
+	}
+	if(support)
+		*averageGapDistance = (INT64)(*averageGapDistance/(INT64)(support));
+	return support;
+}
+
+
+
+

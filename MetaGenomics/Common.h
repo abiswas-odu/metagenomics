@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <cstdlib>
-#include<time.h>
+#include <time.h>
 #include <algorithm>
 #include <iostream>
 #include <string>
@@ -25,6 +25,10 @@
 #include <streambuf>
 #include <sys/stat.h>
 #include <map>
+#include <string>
+#include <cstring>
+#include <hash_map>
+#include <omp.h>
 
 using namespace std;
 
@@ -42,6 +46,13 @@ typedef long long INT64;
 #define deadEndLength 10
 #define minimumSupport 3
 #define loopLimit 15
+#define	coverageDepthLB 40
+#define coverageDepthUB 200
+#define insertSizeRangeSD 3	// 3 means mean +/- 3 SD
+
+//Multi-thread parallel options
+#define THREAD_COUNT 1
+#define MAX_PAR_GRAPH_SIZE 10
 
 //	Exit code that displays the place of exit and message.
 #define MYEXIT(a) { cout << endl << "Exit from File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << "()" << endl << "Message: " << a << endl; exit(0);}
@@ -76,6 +87,9 @@ inline unsigned int checkMemoryUsage()
 };
 
 
-
+inline void str_reverse( char *str ) {
+    char *str_end = strchr( str, 0 );
+    std::reverse( str, str_end );
+}
 
 #endif /* COMMON_H_ */

@@ -20,7 +20,8 @@
 enum nodeType {
 	UNEXPLORED = 0, // Current node u is not explored yet. Meaning that there is no edge (u,v) in the graph.
 	EXPLORED = 1, //  Current node u is explored. Meaning that all edges (u,v) are inserted in the dataset.
-	EXPLORED_AND_TRANSITIVE_EDGES_MARKED = 2 // Meaning that all transitive edges (u,v) of current node u is marked and its neighbors transitive edges are also marked. Now it is safe to remove any transitive edge (u,v) from node u.
+	EXPLORED_AND_TRANSITIVE_EDGES_MARKED = 2, // Meaning that all transitive edges (u,v) of current node u is marked and its neighbors transitive edges are also marked. Now it is safe to remove any transitive edge (u,v) from node u.
+	EXPLORED_AND_TRANSITIVE_EDGES_REMOVED = 3 // Meaning that all transitive edges (u,v) of current node u has been removed and its neighbors transitive edges are also marked. Now it is safe to remove any transitive edge (u,v) from node u.
 };
 
 enum markType{
@@ -40,6 +41,7 @@ class OverlapGraph
 		UINT64 estimatedGenomeSize;									// Estimated genome size. Works for isolated genome. Will not work for Metagenomics.
 		UINT64 numberOfNodes;										// Number of nodes in the overlap graph.
 		UINT64 numberOfEdges;										// Number of edges in the overlap graph.
+		INT64 longestMeanOfInsertSize; // CP: the longest mean insert size out of all datasets: max(meanOfInsertSizes[i])
 		UINT8 mergedEdgeOrientation(Edge *edge1, Edge *edge2);		// Orientation of the edge when two edges are merged.
 		UINT8 twinEdgeOrientation(UINT8 orientation);				// Orientation of the reverse edge.
 		bool mergeList(Edge *edge1, Edge *edge2, vector<UINT64> *listReads, vector<UINT16> *listOverlapOffsets, vector<UINT8> * ListOrientations);
@@ -51,10 +53,11 @@ class OverlapGraph
 		OverlapGraph(void);											// Default constructor.
 		OverlapGraph(HashTable *ht);								// Another constructor.
 		~OverlapGraph();											// Destructor.
-		bool markTransitiveEdges(UINT64 readNumber, vector<markType> * markedNodes); // Mark transitive edges of a read.
+		bool markTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph); // Mark transitive edges of a read.
 		bool buildOverlapGraphFromHashTable(HashTable *ht);			// Build the overlap graph using hashtable.
+		bool insertEdge(Edge * edge, map<UINT64, vector<Edge*> * > *parGraph); 								// Insert an edge in the partial overlap graph.
 		bool insertEdge(Edge * edge); 								// Insert an edge in the overlap graph.
-		bool insertEdge(Read *read1, Read *read2,  UINT8 orient, UINT16 overlapOffset); // Insert an edge in the overlap graph.
+		bool insertEdge(Read *read1, Read *read2,  UINT8 orient, UINT16 overlapOffset, map<UINT64, vector<Edge*> * > *parGraph); // Insert an edge in the overlap graph.
 		UINT64 contractCompositePaths(void); 						// Contract composite paths in the overlap graph.
 		UINT64 removeDeadEndNodes(void); 					        // Remove dead-ends from the overlap graph.
 		bool removeEdge(Edge *edge); 								// Remove an edge from the overlap graph.
@@ -64,7 +67,7 @@ class OverlapGraph
 		bool checkOverlap(Read *read1, Read *read2, UINT64 orient, UINT64 start); // Check overlap between two reads after a match is found using the hash table.
 		bool checkOverlapForContainedRead(Read *read1, Read *read2, UINT64 orient, UINT64 start);
 		bool printGraph(string graphFileName, string contigFileName);	// Store the overlap graph for visual display and also store the contigs/scaffods in a file.
-		bool insertAllEdgesOfRead(UINT64 readNumber, vector<nodeType> * exploredReads);	// Insert into the overlap graph all edges of a read.
+		bool insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> * exploredReads, map<UINT64, vector<Edge*> * > *parGraph);	// Insert into the overlap graph all edges of a read.
 		bool removeTransitiveEdges(UINT64 readNumber);				// Remove all transitive edges from the overlap graph incident to a given read.
 		bool mergeEdges(Edge *edge1, Edge *edge2);					// Merge two edges in the  overlap graph.
 		UINT64 removeAllSimpleEdgesWithoutFlow();						// Not used. Only for testing.
@@ -75,6 +78,7 @@ class OverlapGraph
 		UINT64 getNumberOfEdges(void){return numberOfEdges;}		// Get the number of edges in the overlap graph.
 		UINT64 getNumberOfNodes(void){return numberOfNodes;}		// Get the number of nodes in the overlap graph.
 		bool saveGraphToFile(string fileName);						// Save the unitig graph to a file. This file can be used to reproduced the graph. Useful to avoid recomputing the graph.
+		bool saveParGraphToFile(string fileName, map<UINT64,nodeType> * exploredReads, map<UINT64, vector<Edge*> * > *parGraph);   //Save partial graph to file and reduce memory footprint
 		bool readGraphFromFile(string fileName);					// Read the graph from a file stored before.
 		bool setDataset(Dataset *dataset){dataSet=dataset; dataset->readMatePairsFromFile(); return true;}	// Set the dataset pointer.
 		bool calculateFlow(string inputFileName, string outputFileName);									// Calculate the minimum cost flow of the overlap graph.
@@ -97,6 +101,11 @@ class OverlapGraph
 		UINT64 findOverlap(string string1, string string2);			// Find overlap length between two strings.
 		UINT64 calculateEditDistance(const std::string &s1, const std::string &s2);	// Find the edit distance between two strings.
 		UINT64 reduceLoops(void);									// loops that can be traversed only one way
+		vector< vector<Edge *> * > * getGraph() {return graph;};
+		vector<Edge *> * getListOfFeasibleEdges(const Edge *edge);
+		UINT64 checkForScaffold(const Edge *edge1, const Edge *edge2, INT64 *averageGapDistance);
+		UINT64 checkForScaffold(const Edge *edge1, const Edge *edge2, INT64 *averageGapDistance, vector<Read *> * pairedReadsInSource, vector <Read *> *pairedReadsInDestination, vector<INT64> *gapDistance);
+
 };
 
 

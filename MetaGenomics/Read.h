@@ -10,6 +10,7 @@
 #define READ_H_
 
 #include "Common.h"
+#include "dna.h"
 
 class Edge;
 
@@ -32,20 +33,15 @@ class Read
 {
 	private:
 		UINT64 readNumber; 						// Unique Identification of the read.
-		string read; 							// String representation of the read.
-		string readReverse;
+		dna_bitset *read; 							// String representation of the read.
 		UINT32 frequency; 						// Frequency of the read. Number of times this read is present in the dataset. Used in some statistical analysis.
 		vector<MPlist> *matePairList;
 		vector<Edge *> *listOfEdgesForward;   	// List of edges that contain the forward string of this read.
 		vector<UINT64> *locationOnEdgeForward;	// List of locations on the edges that contain the forward string of the current read.
 		vector<Edge *> *listOfEdgesReverse;		// List of edges that contain the reverse string of this read.
 		vector<UINT64> *locationOnEdgeReverse;	// List of locations on the edges that contain the reverse string of the current read.
-
-		string reverseComplement(const string & read);
-
+		string reverseComplement() const;
 	public:
-		UINT64 coverageDepth;					// Estimated depth of coverage.  --> Not use anymore
-		UINT64 locationInDataset;				// Not for debugging only. Will be removed.  --> Not use anymore
 		bool isContainedRead;
 		UINT64 superReadID;						// 0 = not a contained read
 												// otherwise superReadID contains the ID of the uniqe super read.
@@ -55,12 +51,12 @@ class Read
 
 		bool setRead(const string & s); 		// Set the read.
 		bool setReadNumber(UINT64 id); 			// Set the read number.
-		bool setFrequency(UINT32 freq);			// Set the ferquency of the read.
+		bool setFrequency(UINT32 freq);			// Set the frequency of the read.
 
-		string getStringForward(void){return read;} 									// Get the forward string of the current read.
-		string getStringReverse(void){return readReverse;} 								// Get the reverse string of the current read.
-		UINT16 getReadLength(void){return read.length();} 								// Get the length of the string in the current read.
-		UINT64 getReadNumber(void) {return readNumber;} 								// Get the read number of the current read.
+		string getStringForward(void) const {return read->toString();} 									// Get the forward string of the current read.
+		string getStringReverse(void) const {return reverseComplement();} 								// Get the reverse string of the current read.
+		UINT16 getReadLength(void) const {return read->getLength();} 								// Get the length of the string in the current read.
+		UINT64 getReadNumber(void) const {return readNumber;} 								// Get the read number of the current read.
 		UINT32 getFrequency(void) {return frequency;}									// Get the frequency of the current read.
 		vector<MPlist> * getMatePairList(void) {return matePairList;} 					// Get the list of matepairs.
 		vector<Edge *> * getListOfEdgesForward(void){return listOfEdgesForward;}		// Get the list of edges that contain the forward string of the current read.
