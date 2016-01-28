@@ -123,9 +123,9 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht)
 	//this->dataSet->readMatePairsFromFile();				//Read later not required now.
 
 	vector<UINT64> * allMarked = new vector<UINT64>;
-	allMarked->reserve(dataSet->getNumberOfUniqueReads());
+	allMarked->reserve(dataSet->getNumberOfUniqueReads()+1);
 
-	for(UINT64 i = 0; i < dataSet->getNumberOfUniqueReads(); i++) // Initialization
+	for(UINT64 i = 0; i <= dataSet->getNumberOfUniqueReads(); i++) // Initialization
 	{
 		allMarked->push_back(0);
 	}
@@ -135,7 +135,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht)
 		int makedNodes=0;
 		#pragma omp critical(assignRandomStart)    //Set initial start points...
 		{
-			for(UINT64 i=0;i<allMarked->size();i++)
+			for(UINT64 i=1;i<allMarked->size();i++)
 			{
 				if(allMarked->at(i)==0)
 				{
@@ -148,18 +148,18 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht)
 		while(startReadID!=-1) // Loop till all nodes marked
 		{
 			map<UINT64,nodeType> *exploredReads = new map<UINT64,nodeType>;							//Record of nodes processed
-			vector<UINT64> *queue = new vector<UINT64>;												//Queue
+			queue<UINT64> *nodeQ = new queue<UINT64>;												//Queue
 			map<UINT64, vector<Edge*> * > *parGraph = new map<UINT64, vector<Edge*> * >;			//Partial graph
 
 			vector<Edge *> *newList = new vector<Edge *>;
 			parGraph->insert( std::pair<UINT64, vector<Edge*> * >(startReadID, newList)); // Insert start node
 			if(exploredReads->find(startReadID) ==  exploredReads->end()) //if node is UNEXPLORED
 			{
-				UINT64 start = 0, end = 0; 											// Initialize queue start and end.
-				queue->at(end++) = startReadID;
-				while(start < end) 													// This loop will explore all connected component starting from read startReadID.
+				nodeQ->push(startReadID);  											// // Initialize queue start and end.
+				while(!nodeQ->empty()) 													// This loop will explore all connected component starting from read startReadID.
 				{
-					UINT64 read1 = queue->at(start++);
+					UINT64 read1 = nodeQ->front();										//Pop from queue...
+					nodeQ->pop();
 					bool isPrevMarked=false;
 					#pragma omp critical(assignRandomStart)
 					{
@@ -182,11 +182,11 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht)
 								for(UINT64 index1 = 0; index1 < parGraph->at(read1)->size(); index1++ )
 								{
 									UINT64 read2 = parGraph->at(read1)->at(index1)->getDestinationRead()->getReadNumber();
-									if(exploredReads->at(read2) == UNEXPLORED) 			// Not explored.
+									if(exploredReads->find(read2) ==  exploredReads->end()) 			// Not explored.
 									{
-										queue->at(end++) = read2; 						// Put in the queue.
+										nodeQ->push(read2);  						// Put in the queue.
 										insertAllEdgesOfRead(read2, exploredReads, parGraph);
-										exploredReads->at(read2) = EXPLORED;
+										exploredReads->insert( std::pair<UINT64,nodeType>(read2,EXPLORED) );
 									}
 								}
 								markTransitiveEdges(read1, parGraph); // Mark transitive edges
@@ -202,18 +202,18 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht)
 										for(UINT64 index2 = 0; index2 < parGraph->at(read2)->size(); index2++) 		// Explore all neighbors neighbors
 										{
 											UINT64 read3 = parGraph->at(read2)->at(index2)->getDestinationRead()->getReadNumber();
-											if(exploredReads->at(read3) == UNEXPLORED) 				// Not explored
+											if(exploredReads->find(read3) ==  exploredReads->end()) 				// Not explored
 											{
-												queue->at(end++) = read3; 					// Put in the queue
+												nodeQ->push(read3);  					// Put in the queue
 												insertAllEdgesOfRead(read3, exploredReads, parGraph);
-												exploredReads->at(read3) = EXPLORED;
+												exploredReads->insert( std::pair<UINT64,nodeType>(read3,EXPLORED) );
 											}
 										}
 										markTransitiveEdges(read2, parGraph); // Mark transitive edge
 										exploredReads->at(read2) = EXPLORED_AND_TRANSITIVE_EDGES_MARKED;
 									}
 								}
-								removeTransitiveEdges(read1); // Remove the transitive edges
+								removeTransitiveEdges(read1, parGraph); // Remove the transitive edges
 								exploredReads->at(read1) = EXPLORED_AND_TRANSITIVE_EDGES_REMOVED;
 								makedNodes++;
 							}
@@ -238,7 +238,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht)
 			}
 			delete parGraph;
 			delete exploredReads;
-			delete queue;
+			delete nodeQ;
 			startReadID=-1;
 			#pragma omp critical(assignRandomStart)
 			{
@@ -255,6 +255,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht)
 	}
 
 	delete hashTable;	// Do not need the hash table any more.
+	exit(0);
 	do
 	{
 		 counter = contractCompositePaths();
@@ -279,7 +280,7 @@ void OverlapGraph::markContainedReads(void)
 		return;
 	}
 	UINT64 counter = 0;
-	for(UINT64 i = 0; i < dataSet->getNumberOfUniqueReads(); i++) // For each read
+	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
 	{
 		Read *read1 = dataSet->getReadFromID(i); // Get the read
 		string readString = read1->getStringForward(); // Get the forward of the read
@@ -323,7 +324,7 @@ void OverlapGraph::markContainedReads(void)
 
 	// Get some statistics
 	UINT64 containedReads = 0, nonContainedReads = 0;
-	for(UINT64 i = 0; i < dataSet->getNumberOfUniqueReads(); i++)
+	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++)
 	{
 		Read *rr = dataSet->getReadFromID(i);
 		if(rr->superReadID == 0) // Count the number of reads that are not contained by some other reads.
@@ -635,7 +636,7 @@ bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> 
 **********************************************************************************************************************/
 bool OverlapGraph::markTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph)
 {
-	map<UINT64,markType> *markedNodes;
+	map<UINT64,markType> *markedNodes = new map<UINT64,markType>();
 	for(UINT64 i = 0; i < parGraph->at(readNumber)->size(); i++){ // Mark all the neighbors of the current read as INPLAY
 		markedNodes->insert(std::pair<UINT64,markType>(parGraph->at(readNumber)->at(i)->getDestinationRead()->getReadNumber(), INPLAY));
 	}
@@ -676,22 +677,22 @@ bool OverlapGraph::markTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edg
 	Remove all transitive edges of a given read.
 	For Details: E.W. Myers. The fragment assembly string graph. Bioinformatics, 21(suppl 2):ii79-ii85, 2005.
 **********************************************************************************************************************/
-bool OverlapGraph::removeTransitiveEdges(UINT64 readNumber)
+bool OverlapGraph::removeTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph)
 {
-	for(UINT64 index = 0; index < graph->at(readNumber)->size(); index++)  		// Go through the list of edges of the current read.
+	for(UINT64 index = 0; index < parGraph->at(readNumber)->size(); index++)  		// Go through the list of edges of the current read.
 	{
-		if(graph->at(readNumber)->at(index)->transitiveRemovalFlag == true)		// This edge is marked as transitive. We will first remove the reverese edge.
+		if(parGraph->at(readNumber)->at(index)->transitiveRemovalFlag == true)		// This edge is marked as transitive. We will first remove the reverese edge.
 		{
-			Edge *twinEdge = graph->at(readNumber)->at(index)->getReverseEdge();
+			Edge *twinEdge = parGraph->at(readNumber)->at(index)->getReverseEdge();
 			UINT64 ID = twinEdge->getSourceRead()->getReadNumber();
-			for(UINT64 index1 = 0; index1 < graph->at(ID)->size(); index1++) 	// Get the reverse edge first
+			for(UINT64 index1 = 0; index1 < parGraph->at(ID)->size(); index1++) 	// Get the reverse edge first
 			{
-				if(graph->at(ID)->at(index1) == twinEdge)
+				if(parGraph->at(ID)->at(index1) == twinEdge)
 				{
 					delete twinEdge;
-					graph->at(ID)->at(index1) = graph->at(ID)->at(graph->at(ID)->size()-1); // Move the transitive edges at the back of the list and remove.
-					graph->at(ID)->pop_back();
-					if(graph->at(ID)->empty())
+					parGraph->at(ID)->at(index1) = parGraph->at(ID)->at(parGraph->at(ID)->size()-1); // Move the transitive edges at the back of the list and remove.
+					parGraph->at(ID)->pop_back();
+					if(parGraph->at(ID)->empty())
 						numberOfNodes--;
 					numberOfEdges--;
 					break;
@@ -700,18 +701,18 @@ bool OverlapGraph::removeTransitiveEdges(UINT64 readNumber)
 		}
 	}
 	UINT64 j=0;
-	for(UINT64 index=0; index < graph->at(readNumber)->size(); index++) // Then we will remove all the transitive edges of the current read.
+	for(UINT64 index=0; index < parGraph->at(readNumber)->size(); index++) // Then we will remove all the transitive edges of the current read.
 	{
-		if(graph->at(readNumber)->at(index)->transitiveRemovalFlag == false)		// We move all the non-transitive edges at the beginning of the list
-			graph->at(readNumber)->at(j++) = graph->at(readNumber)->at(index);
+		if(parGraph->at(readNumber)->at(index)->transitiveRemovalFlag == false)		// We move all the non-transitive edges at the beginning of the list
+			parGraph->at(readNumber)->at(j++) = parGraph->at(readNumber)->at(index);
 		else		// Free the transitive edge
 		{
 			numberOfEdges--;
-			delete graph->at(readNumber)->at(index);
+			delete parGraph->at(readNumber)->at(index);
 		}
 	}
-	graph->at(readNumber)->resize(j);
-	if(graph->at(readNumber)->empty())
+	parGraph->at(readNumber)->resize(j);
+	if(parGraph->at(readNumber)->empty())
 		numberOfNodes--;
 	return true;
 }
@@ -1304,13 +1305,20 @@ bool OverlapGraph::saveParGraphToFile(string fileName, map<UINT64,nodeType> * ex
 				}
 			}
 			parGraph->erase(it++);
+			if(list->size()>0)
+			{
+				filePointer<<list->at(0)<<"\t";
+				filePointer<<list->at(1)<<"\t";
+				for(UINT64 i = 2; i < list->size(); i++)	// store in a file for future use.
+					filePointer<<list->at(i)<<",";
+				filePointer<<endl;
+			}
+			list->clear();
 		}
 		else
 			++it;
 
 	}
-	for(UINT64 i = 0; i < list->size(); i++)	// store in a file for future use.
-		filePointer<<list->at(i)<<endl;
 	filePointer.close();
 	delete list;
 	CLOCKSTOP;

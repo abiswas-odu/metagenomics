@@ -68,7 +68,7 @@ class OverlapGraph
 		bool checkOverlapForContainedRead(Read *read1, Read *read2, UINT64 orient, UINT64 start);
 		bool printGraph(string graphFileName, string contigFileName);	// Store the overlap graph for visual display and also store the contigs/scaffods in a file.
 		bool insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> * exploredReads, map<UINT64, vector<Edge*> * > *parGraph);	// Insert into the overlap graph all edges of a read.
-		bool removeTransitiveEdges(UINT64 readNumber);				// Remove all transitive edges from the overlap graph incident to a given read.
+		bool removeTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph);				// Remove all transitive edges from the overlap graph incident to a given read.
 		bool mergeEdges(Edge *edge1, Edge *edge2);					// Merge two edges in the  overlap graph.
 		UINT64 removeAllSimpleEdgesWithoutFlow();						// Not used. Only for testing.
 		UINT64 getEstimatedGenomeSize() {return estimatedGenomeSize;} 	// Get the estimated genome size.
