@@ -63,6 +63,7 @@ Read::Read(const string & s)
 Read::~Read(void)
 {
 	// delete all the pointers.
+	delete read;
 	delete matePairList;
 	delete listOfEdgesForward;
 	delete listOfEdgesReverse;

@@ -30,6 +30,9 @@
 #include <hash_map>
 #include <queue>
 #include <omp.h>
+#include <cmath>
+#include <ctime>
+#include <functional>
 
 using namespace std;
 
@@ -52,13 +55,15 @@ typedef long long INT64;
 #define insertSizeRangeSD 3	// 3 means mean +/- 3 SD
 
 //Multi-thread parallel options
-#define THREAD_COUNT 1
-#define MAX_PAR_GRAPH_SIZE 10
+#define DEF_THREAD_COUNT 4
+#define MAX_PAR_GRAPH_SIZE 10000
 
 //	Exit code that displays the place of exit and message.
 #define MYEXIT(a) { cout << endl << "Exit from File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << "()" << endl << "Message: " << a << endl; exit(0);}
 // Print which function is currently executing. Only for functions that take long time
 
+
+#define SSTR( x ) dynamic_cast< std::ostringstream & >(( std::ostringstream() << std::dec << x ) ).str()
 
 // To keep time information of functions.
 #define CLOCKSTART INT64 mem_start = checkMemoryUsage(); clock_t begin = clock(); cout<<"Currently in file: " << __FILE__ << " Function: "<< __FUNCTION__ << "()" << endl;

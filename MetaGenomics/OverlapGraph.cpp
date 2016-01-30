@@ -65,6 +65,9 @@ OverlapGraph::OverlapGraph(void)
 	numberOfNodes = 0;
 	numberOfEdges = 0;
 	flowComputed = false;
+	parallelThreadPoolSize=DEF_THREAD_COUNT;
+	writeParGraphSize=MAX_PAR_GRAPH_SIZE;
+
 }
 
 
@@ -74,13 +77,15 @@ OverlapGraph::OverlapGraph(void)
 BNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMM
 
 UYTREWQ**********************************************************************************************************************/
-OverlapGraph::OverlapGraph(HashTable *ht)
+OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph)
 {
 	// Initialize the variables.
 	estimatedGenomeSize = 0;
 	numberOfNodes = 0;
 	numberOfEdges = 0;
 	flowComputed = false;
+	parallelThreadPoolSize=maxThreads;
+	writeParGraphSize=maxParGraph;
 	buildOverlapGraphFromHashTable(ht);
 }
 
@@ -129,10 +134,10 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht)
 	{
 		allMarked->push_back(0);
 	}
-	#pragma omp parallel num_threads(THREAD_COUNT)
+	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
-		UINT64 startReadID,prevReadID;
-		int makedNodes=0;
+		UINT64 startReadID=-1,prevReadID=-1;
+		UINT64 writtenMakedNodes=0;
 		#pragma omp critical(assignRandomStart)    //Set initial start points...
 		{
 			for(UINT64 i=1;i<allMarked->size();i++)
@@ -215,26 +220,29 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht)
 								}
 								removeTransitiveEdges(read1, parGraph); // Remove the transitive edges
 								exploredReads->at(read1) = EXPLORED_AND_TRANSITIVE_EDGES_REMOVED;
-								makedNodes++;
+								writtenMakedNodes++;
 							}
 						}
 					}
-					if(makedNodes>MAX_PAR_GRAPH_SIZE)
+					if(writtenMakedNodes>MAX_PAR_GRAPH_SIZE)
 					{
 						int threadID = omp_get_thread_num();
-						saveParGraphToFile(threadID + "_parGraph.txt" , exploredReads, parGraph);
+						saveParGraphToFile(SSTR(threadID) + "_parGraph.txt" , exploredReads, parGraph);
+						writtenMakedNodes=0;
 					}
 				}
 			}
 			int threadID = omp_get_thread_num();
-			saveParGraphToFile(threadID + "_parGraph.txt" , exploredReads, parGraph);
-			for(UINT64 i = 0; i < parGraph->size(); i++)
+			saveParGraphToFile(SSTR(threadID) + "_parGraph.txt" , exploredReads, parGraph);
+			for (map<UINT64, vector<Edge*> * >::iterator it=parGraph->begin(); it!=parGraph->end();it++)
 			{
-				for(UINT64 j = 0; j< parGraph->at(i)->size(); j++)
+				UINT64 readID = it->first;
+				for(UINT64 j = 0; j< parGraph->at(readID)->size(); j++)
 				{
-					delete parGraph->at(i)->at(j);
+					delete parGraph->at(readID)->at(j);
 				}
-				delete parGraph->at(i);
+				delete parGraph->at(readID);
+
 			}
 			delete parGraph;
 			delete exploredReads;
@@ -255,13 +263,15 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht)
 	}
 
 	delete hashTable;	// Do not need the hash table any more.
+	cout<<endl<<"Graph Construction Complete"<<endl;
+	CLOCKSTOP;
 	exit(0);
 	do
 	{
 		 counter = contractCompositePaths();
 		 counter += removeDeadEndNodes();
 	} while (counter > 0);
-	CLOCKSTOP;
+
 	return true;
 }
 
@@ -1282,42 +1292,60 @@ bool OverlapGraph::saveParGraphToFile(string fileName, map<UINT64,nodeType> * ex
 	for (map<UINT64, vector<Edge*> * >::iterator it=parGraph->begin(); it!=parGraph->end();)
 	{
 		UINT64 readID = it->first;
-		if(!it->second->empty() && exploredReads->at(readID) == EXPLORED_AND_TRANSITIVE_EDGES_REMOVED)
+		if(!it->second->empty() && exploredReads->find(readID) !=  exploredReads->end())
 		{
-			for(UINT64 j = 0; j < it->second->size(); j++)	// for each edge of the node
+			if(exploredReads->at(readID) == EXPLORED_AND_TRANSITIVE_EDGES_REMOVED)
 			{
-				Edge * e = it->second->at(j);
-				UINT64 source = e->getSourceRead()->getReadNumber();
-				UINT64 destination = e->getDestinationRead()->getReadNumber();
-				if(source < destination || (source == destination && e < e->getReverseEdge()))
+				for(UINT64 j = 0; j < it->second->size(); j++)	// for each edge of the node
 				{
-					list->push_back(source);	// store the edge information first
-					list->push_back(destination);
-					list->push_back(e->getOrientation());
-					list->push_back(e->getOverlapOffset());
-					list->push_back(e->getListOfReads()->size());	// store the size of the vector of elements in the edge.
-					for(UINT64 k = 0; k < e->getListOfReads()->size(); k++)	// store information about the reads in the edge.
+					Edge * e = it->second->at(j);
+					UINT64 source = e->getSourceRead()->getReadNumber();
+					UINT64 destination = e->getDestinationRead()->getReadNumber();
+					if(source < destination || (source == destination && e < e->getReverseEdge()))
 					{
-						list->push_back(e->getListOfReads()->at(k));
-						list->push_back(e->getListOfOverlapOffsets()->at(k));
-						list->push_back(e->getListOfOrientations()->at(k));
+						list->push_back(source);	// store the edge information first
+						list->push_back(destination);
+						list->push_back(e->getOrientation());
+						list->push_back(e->getOverlapOffset());
 					}
+					if(list->size()>0)
+					{
+						filePointer<<list->at(0)<<"\t";
+						filePointer<<list->at(1)<<"\t";
+						for(UINT64 i = 2; i < list->size(); i++)	// store in a file for future use.
+							filePointer<<list->at(i)<<",";
+						filePointer<<endl;
+					}
+					list->clear();
+					//remove twin edges
+					Edge *twinEdge = it->second->at(j)->getReverseEdge();
+					UINT64 ID = twinEdge->getSourceRead()->getReadNumber();
+					for(UINT64 index1 = 0; index1 < parGraph->at(ID)->size(); index1++) 	// Get the reverse edge first
+					{
+						if(parGraph->at(ID)->at(index1) == twinEdge)
+						{
+							delete twinEdge;
+							parGraph->at(ID)->at(index1) = parGraph->at(ID)->at(parGraph->at(ID)->size()-1); // Move the transitive edges at the back of the list and remove.
+							parGraph->at(ID)->pop_back();
+							break;
+						}
+					}
+
 				}
+				for(UINT64 j = 0; j< parGraph->at(readID)->size(); j++)
+				{
+					delete parGraph->at(readID)->at(j);
+				}
+				delete parGraph->at(readID);
+				parGraph->erase(it++);
+				exploredReads->at(readID) = EXPLORED_AND_TRANSITIVE_EDGES_WRITTEN;
+
 			}
-			parGraph->erase(it++);
-			if(list->size()>0)
-			{
-				filePointer<<list->at(0)<<"\t";
-				filePointer<<list->at(1)<<"\t";
-				for(UINT64 i = 2; i < list->size(); i++)	// store in a file for future use.
-					filePointer<<list->at(i)<<",";
-				filePointer<<endl;
-			}
-			list->clear();
+			else
+				++it;
 		}
 		else
 			++it;
-
 	}
 	filePointer.close();
 	delete list;

@@ -7,6 +7,7 @@
 
 #include "Common.h"
 #include "Dataset.h"
+#include "QSort.h"
 
 
 
@@ -62,6 +63,7 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 	cout << " Longest read length in all datasets: " << setw(5) << longestReadLength <<endl;;
 	sortReads();
 	removeDupicateReads();								// Remove duplicated reads for the dataset.
+	reads->resize(reads->size());
 }
 
 

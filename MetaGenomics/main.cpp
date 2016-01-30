@@ -18,7 +18,7 @@
 
 
 
-void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, vector<string> & singleEndFileNames,string & allFileName, UINT64 & minimumOverlapLength, bool & startFromUnitigGraph);
+void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, vector<string> & singleEndFileNames,string & allFileName, UINT64 & minimumOverlapLength, bool & startFromUnitigGraph, UINT64 & maxthreads, UINT64 & writeGraphSize);
 
 int main(int argc, char **argv)
 {
@@ -29,7 +29,9 @@ int main(int argc, char **argv)
 	UINT64 iteration = 0;
 	string allFileName;
 	bool startFromUnitigGraph = false;
-	parseArguments(argc, argv, pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength, startFromUnitigGraph);
+	UINT64 maxThreads = DEF_THREAD_COUNT;
+	UINT64 writeGraphSize = MAX_PAR_GRAPH_SIZE;
+	parseArguments(argc, argv, pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength, startFromUnitigGraph, maxThreads, writeGraphSize);
 	Dataset *dataSet = new Dataset(pairedEndFileNames, singleEndFileNames, minimumOverlapLength);
 	OverlapGraph *overlapGraph;
 
@@ -44,7 +46,7 @@ int main(int argc, char **argv)
 	{
 		HashTable *hashTable=new HashTable();
 		hashTable->insertDataset(dataSet, minimumOverlapLength);
-		overlapGraph=new OverlapGraph(hashTable); //hashTable deleted by this function after building the graph
+		overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize); //hashTable deleted by this function after building the graph
 		dataSet->saveReads(allFileName+"_sortedReads.fasta");
 		overlapGraph->sortEdges();
 		overlapGraph->saveGraphToFile(allFileName+".unitig");
@@ -114,7 +116,7 @@ int main(int argc, char **argv)
 	Parse the input arguments
 **********************************************************************************************************************/
 
-void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, vector<string> & singleEndFileNames, string & allFileName, UINT64 & minimumOverlapLength, bool & startFromUnitigGraph)
+void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, vector<string> & singleEndFileNames, string & allFileName, UINT64 & minimumOverlapLength, bool & startFromUnitigGraph, UINT64 & maxthreads, UINT64 & writeGraphSize)
 {
 	allFileName = "";
 	minimumOverlapLength = 0;
@@ -135,6 +137,9 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 		cerr << "  -pe\tnumber of files and paired-end file names" <<endl; 			// Paired-end file name in fasta/fastq format. mate pairs should be one after another in the file.
 		cerr << "  -se\tnumber of files and single-end file names" <<endl; 			// Single-end file name in fasta/fastq format.
 		cerr << "  -f\tAll file name prefix" <<endl; 			// all output file with have this name with different extensions.
+		cerr << "  -l\tminimum overlap length" << endl; 	// Minimum overlap length for two reads to overlap in the overlap graph.
+		cerr << "  -t\tmaximum threads used" << endl; 	// Minimum overlap length for two reads to overlap in the overlap graph.
+		cerr << "  -w\tgraph write frequency per" << endl; 	// Minimum overlap length for two reads to overlap in the overlap graph.
 		cerr << "  -l\tminimum overlap length" << endl; 	// Minimum overlap length for two reads to overlap in the overlap graph.
 		cerr << "  -s\tstart from unitig graph" << endl; 	// -s means that the program will build the graph. Otherwise it will load the graph from the unitig graph file.
 			exit(0);
@@ -164,12 +169,18 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 			minimumOverlapLength = atoi(argumentsList[++i].c_str());
 		else if (argumentsList[i] == "-s")
 			startFromUnitigGraph = true;
+		else if (argumentsList[i] == "-t")
+			maxthreads = atoi(argumentsList[++i].c_str());
+		else if (argumentsList[i] == "-w")
+			writeGraphSize = atoi(argumentsList[++i].c_str());
 		else
 		{
 			cerr << endl << "Usage: MetaGenomics [OPTION]...[PRARAM]..." << endl;
 			cerr << "  -pe\tnumber of files and paired-end file names" <<endl; 			// Paired-end file name in fasta/fastq format. mate pairs should be one after another in the file.
 			cerr << "  -se\tnumber of files and single-end file names" <<endl; 			// Single-end file name in fasta/fastq format.
 			cerr << "  -f\tAll file name prefix" <<endl; 			// all output file with have this name with different extensions.
+			cerr << "  -l\tminimum overlap length" << endl; 	// Minimum overlap length for two reads to overlap in the overlap graph.
+			cerr << "  -w\tgraph write frequency per" << endl; 	// Minimum overlap length for two reads to overlap in the overlap graph.
 			cerr << "  -l\tminimum overlap length" << endl; 	// Minimum overlap length for two reads to overlap in the overlap graph.
 			cerr << "  -s\tstart from unitig graph" << endl; 	// -s means that the program will build the graph. Otherwise it will load the graph from the unitig graph file.
 			if (argumentsList[i] == "-h" || argumentsList[i] == "--help")
