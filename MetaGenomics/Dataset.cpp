@@ -7,7 +7,6 @@
 
 #include "Common.h"
 #include "Dataset.h"
-#include "QSort.h"
 
 
 
@@ -60,10 +59,16 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 		readDataset(singleEndDatasetFileNames.at(i), minimumOverlapLength, counter++);
 	}
 	cout << endl << "Shortest read length in all datasets: " << setw(5) << shortestReadLength<<endl;
-	cout << " Longest read length in all datasets: " << setw(5) << longestReadLength <<endl;;
-	sortReads();
-	removeDupicateReads();								// Remove duplicated reads for the dataset.
+	cout << " Longest read length in all datasets: " << setw(5) << longestReadLength <<endl;
+
+	for(UINT64 i = 0 ; i < reads->size(); i++) 		// Assing ID's to the reads.
+		reads->at(i)->setReadNumber(i + 1);
+	numberOfUniqueReads=reads->size();
 	reads->resize(reads->size());
+
+	//sortReads();
+	//removeDupicateReads();								// Remove duplicated reads for the dataset.
+
 }
 
 
@@ -107,7 +112,7 @@ void Dataset::readMatePairsFromFile(void)
 
 
 /**********************************************************************************************************************
-	This function reads the sdataset from FASTA/FASTQ files
+	This function reads the dataset from FASTA/FASTQ files
 **********************************************************************************************************************/
 bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumber)
 {
@@ -119,7 +124,7 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 		MYEXIT("Unable to open file: "+fileName)
 	UINT64 goodReads = 0, badReads = 0;
 	vector<string> line;
-	string line1, text, line1ReverseComplement,line2ReverseComplement;
+	string line1,line0, text, line1ReverseComplement,line2ReverseComplement;
 	enum FileType { FASTA, FASTQ, UNDEFINED};
 	FileType fileType = UNDEFINED;
 	while(!myFile.eof())
@@ -146,7 +151,10 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 			line.push_back(text);
 
 			line.at(1).erase(std::remove(line.at(1).begin(), line.at(1).end(), '\n'), line.at(1).end());
+			line.at(0).erase(std::remove(line.at(0).begin(),line.at(0).end(),'>'),line.at(0).end());			//Sequence name
+			line0=line.at(0);
 			line1 = line.at(1);								// The first string is in the 2nd line.
+
 		}
 		else if(fileType == FASTQ) 					// Fastq file.
 		{
@@ -155,6 +163,8 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 				getline (myFile,text);
 				line.push_back(text);
 			}
+			line.at(0).erase(std::remove(line.at(0).begin(),line.at(0).end(),'>'),line.at(0).end());			//Sequence name
+			line0=line.at(0);
 			line1 = line.at(1); 			// The first string is in the 2nd line.
 		}
 		for (std::string::iterator p = line1.begin(); line1.end() != p; ++p) // Change the case
@@ -169,7 +179,7 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 				r1->setRead(line1ReverseComplement);
 
 			UINT64 len = r1->getReadLength();
-
+			r1->setReadName(line0);
 			if(len > longestReadLength)
 				longestReadLength = len;
 			if(len < shortestReadLength)

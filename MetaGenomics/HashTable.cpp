@@ -57,7 +57,7 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength)
 	setHashTableSize(size);
 	UINT64 noOfReads=d->getNumberOfUniqueReads();
 
-	#pragma omp parallel for
+	#pragma omp parallel for num_threads(1)
 	for(UINT64 i = 1; i <= noOfReads; i++)		// For each read in the dataset
 	{
 		hashRead(d->getReadFromID(i)); 								// Insert the read in the hash table.
@@ -65,8 +65,7 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength)
 		//	cout << setw(10) << i << " reads inserted in the hash table. Hash collisions: " << setw(10) << numberOfHashCollision << endl;	// Print some statistics.
 	}
 	//cout << endl << "Total Hash collisions: " << numberOfHashCollision << endl;
-
-	UINT64 longestSize = 0, readID;
+	/*UINT64 longestSize = 0, readID=1;
 	for(UINT64 i = 0 ; i < this->hashTableSize; i++)
 	{
 		if(hashTable->at(i)->size() > longestSize)	// Longest list in the hash table.
@@ -76,8 +75,7 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength)
 		}
 
 	}
-	cout <<"Longest list size in the hash table is: " << longestSize << endl << "Read: " << endl << this->dataSet->getReadFromID(readID & 0X3FFFFFFFFFFFFFF)->getStringForward() << endl << this->dataSet->getReadFromID(readID & 0X3FFFFFFFFFFFFFF)->getStringReverse() << endl << "Orientation: " << (readID >> 62) << endl;
-
+	cout <<"Longest list size in the hash table is: " << longestSize << endl << "Read: " << endl << this->dataSet->getReadFromID(readID & 0X3FFFFFFFFFFFFFF)->getStringForward() << endl << this->dataSet->getReadFromID(readID & 0X3FFFFFFFFFFFFFF)->getStringReverse() << endl << "Orientation: " << (readID >> 62) << endl;*/
 	CLOCKSTOP;
 	return true;
 }
@@ -102,7 +100,6 @@ bool HashTable::hashRead(const Read *read)
 	insertIntoTable(read, suffixForward, 1); // Insert the suffix of the forward string in the hash table.
 	insertIntoTable(read, prefixReverse, 2); // Insert the prefix of the reverse string in the hash table.
 	insertIntoTable(read, suffixReverse, 3); // Insert the suffix of the reverse string in the hash table.
-
 	return true;
 }
 
@@ -118,14 +115,12 @@ void HashTable::setHashTableSize(UINT64 size)
 	cout << "Hash Table size set to: " << size << endl;
 	hashTableSize=size;
     // Ted: hashTable name should be changed. This can be called in the constructor.
-	hashTable = new vector < vector<UINT64> *>;
-	hashTable->reserve(size);
-    // Ted:
-	for(UINT64 i = 0; i < hashTable->capacity(); i++) // Initialize the hash table.
+	hashTable = new vector < vector<UINT64> *>(size);
+	for(UINT64 i = 0; i < hashTable->size(); i++) // Initialize the hash table.
 	{
-		vector<UINT64> * newList = new vector<UINT64>;
-		newList->resize(newList->size());
-		hashTable->push_back(newList);
+		//vector<UINT64> * newList = new vector<UINT64>(0);
+		//hashTable->at(i)=newList;
+		hashTable->at(i)=NULL;
 	}
 }
 
@@ -171,13 +166,13 @@ bool HashTable::insertIntoTable(const Read *read, const string & subString, cons
 																// 10 = 2 means prefix of the reverse string.
 																// 11 = 3 means suffix of the reverse string.
 																// Read number is stored is least significant 62 bits.
-	//UINT64 currentCollision =0;
+	UINT64 currentCollision =0;
 
 	UINT64 index = hashFunction(subString);						// Get the index using the hash function.
 
 	#pragma omp critical(updateHashTable)
 	{
-		while(!hashTable->at(index)->empty())
+		while(hashTable->at(index))
 		{
 			UINT64 data = hashTable->at(index)->at(0);
 			// CP: explain these two bit operations
@@ -194,13 +189,21 @@ bool HashTable::insertIntoTable(const Read *read, const string & subString, cons
 			string subStr = (orient == 0 || orient == 2) ? str.substr(0,hashStringLength) : str.substr(str.length() - hashStringLength, hashStringLength);
 			if(subStr == subString)
 					break;
-			//#pragma omp atomic
-			//	numberOfHashCollision++;
-			//currentCollision++;
+			numberOfHashCollision++;
+			currentCollision++;
 			index = (index == getHashTableSize() - 1) ? 0: index + 1; 	// Increment the index
 		}
-		hashTable->at(index)->push_back(ID);							// Add the string in the list.
-		hashTable->at(index)->resize(hashTable->at(index)->size());		// Resize to reduce space.
+		if(hashTable->at(index)==NULL)
+		{
+			vector<UINT64> * newList = new vector<UINT64>;				// Add the string in the new list.
+			newList->reserve(3);
+			newList->push_back(ID);
+			hashTable->at(index)=newList;
+		}
+		else
+		{
+			hashTable->at(index)->push_back(ID);							// Add the string in the existing list.
+		}
 	}
 
 	/*if(currentCollision > 1000)
@@ -220,7 +223,7 @@ vector<UINT64> * HashTable::getListOfReads(const string & subString) const
 
 		UINT64 index = hashFunction(subString);	// Get the index using the hash function.
 
-		while(!hashTable->at(index)->empty())
+		while(hashTable->at(index))
 		{
 
 			UINT64 data = hashTable->at(index)->at(0);

@@ -17,6 +17,7 @@ Read::Read(void)
 {
 	// Initialize the variables.
 	readNumber = 0;
+	readName="";
 	frequency = 0;
 	isContainedRead = false;
 	superReadID = 0;
@@ -42,6 +43,7 @@ Read::Read(const string & s)
 	read = new dna_bitset(s.c_str(), s.length());
 	setFrequency(1);
 	readNumber = 0;
+	readName="";
 	frequency = 0;
 	isContainedRead = false;
 	superReadID = 0;
@@ -92,6 +94,15 @@ bool Read::setReadNumber(UINT64 id)
 {
 	if(id <= 0) MYEXIT("ID less than 1.");
 	readNumber = id;												// Set the read number.
+	return true;
+}
+
+/**********************************************************************************************************************
+	This function assigns an Name to the read.
+**********************************************************************************************************************/
+bool Read::setReadName(string name)
+{
+	readName = name;
 	return true;
 }
 
@@ -149,6 +160,11 @@ bool Read::addMatePair(Read *r, UINT8 orientation, UINT64 datasetNumber)
 	matePairList->resize(matePairList->size());					// Resize the list to reduce space.
 
 	return true;
+}
+
+bool Read::compareReadOverlap(UINT64 seq1Start, UINT64 seq1Len, Read * seq2, UINT64 seq2Start, UINT64 seq2Len, UINT64 orient)
+{
+	return read->compareSubString(seq1Start,seq1Len,seq2->read,seq2Start,seq2Len, orient);
 }
 
 

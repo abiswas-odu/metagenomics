@@ -33,6 +33,7 @@ class Read
 {
 	private:
 		UINT64 readNumber; 						// Unique Identification of the read.
+		string readName;
 		dna_bitset *read; 							// String representation of the read.
 		UINT32 frequency; 						// Frequency of the read. Number of times this read is present in the dataset. Used in some statistical analysis.
 		vector<MPlist> *matePairList;
@@ -52,11 +53,14 @@ class Read
 		bool setRead(const string & s); 		// Set the read.
 		bool setReadNumber(UINT64 id); 			// Set the read number.
 		bool setFrequency(UINT32 freq);			// Set the frequency of the read.
+		bool setReadName(string name);
 
+		bool compareReadOverlap(UINT64 seq1Start, UINT64 seq1Len, Read * seq2, UINT64 seq2Start, UINT64 seq2Len, UINT64 orient);
 		string getStringForward(void) const {return read->toString();} 									// Get the forward string of the current read.
 		string getStringReverse(void) const {return reverseComplement();} 								// Get the reverse string of the current read.
 		UINT16 getReadLength(void) const {return read->getLength();} 								// Get the length of the string in the current read.
 		UINT64 getReadNumber(void) const {return readNumber;} 								// Get the read number of the current read.
+		string getReadName(void) const {return readName;} 								// Get the read name of the current read.
 		UINT32 getFrequency(void) {return frequency;}									// Get the frequency of the current read.
 		vector<MPlist> * getMatePairList(void) {return matePairList;} 					// Get the list of matepairs.
 		vector<Edge *> * getListOfEdgesForward(void){return listOfEdgesForward;}		// Get the list of edges that contain the forward string of the current read.

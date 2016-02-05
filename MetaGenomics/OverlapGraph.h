@@ -54,10 +54,10 @@ class OverlapGraph
 	public:
 		bool flowComputed;											// Flag to check wheather the flow is computed or not.
 		OverlapGraph(void);											// Default constructor.
-		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph);								// Another constructor.
+		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph, string fnamePrefix);								// Another constructor.
 		~OverlapGraph();											// Destructor.
 		bool markTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph); // Mark transitive edges of a read.
-		bool buildOverlapGraphFromHashTable(HashTable *ht);			// Build the overlap graph using hashtable.
+		bool buildOverlapGraphFromHashTable(HashTable *ht, string fnamePrefix);			// Build the overlap graph using hashtable.
 		bool insertEdge(Edge * edge, map<UINT64, vector<Edge*> * > *parGraph); 								// Insert an edge in the partial overlap graph.
 		bool insertEdge(Edge * edge); 								// Insert an edge in the overlap graph.
 		bool insertEdge(Read *read1, Read *read2,  UINT8 orient, UINT16 overlapOffset, map<UINT64, vector<Edge*> * > *parGraph); // Insert an edge in the overlap graph.
@@ -98,7 +98,7 @@ class OverlapGraph
 		bool mergeListDisconnected(Edge *edge1, Edge *edge2, UINT64 overlapOffset, UINT64 gapLength, vector<UINT64> *listReads, vector<UINT16> *listOverlaps, vector<UINT8> * listOrientations);
 		UINT64 removeSimilarEdges(void);							// remove multi-edges with similar strings
 		UINT64 resolveNodes(void);									// Merge edges based on coverage depth
-		void markContainedReads(void);								// Find superReads for each read and mark them as contained read.
+		void markContainedReads(string fnamePrefix);								// Find superReads for each read and mark them as contained read.
 		void getBaseByBaseCoverage(Edge *edge);						// Get the coverage Mean and SD of an edge. Only considering the unique reads.
 		void sortEdges();											// Sort edges of each read based on ID of the destination read.
 		UINT64 findOverlap(string string1, string string2);			// Find overlap length between two strings.
