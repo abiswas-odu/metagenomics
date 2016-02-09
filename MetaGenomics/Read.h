@@ -37,10 +37,6 @@ class Read
 		dna_bitset *read; 							// String representation of the read.
 		UINT32 frequency; 						// Frequency of the read. Number of times this read is present in the dataset. Used in some statistical analysis.
 		vector<MPlist> *matePairList;
-		vector<Edge *> *listOfEdgesForward;   	// List of edges that contain the forward string of this read.
-		vector<UINT64> *locationOnEdgeForward;	// List of locations on the edges that contain the forward string of the current read.
-		vector<Edge *> *listOfEdgesReverse;		// List of edges that contain the reverse string of this read.
-		vector<UINT64> *locationOnEdgeReverse;	// List of locations on the edges that contain the reverse string of the current read.
 		string reverseComplement() const;
 	public:
 		bool isContainedRead;
@@ -63,10 +59,6 @@ class Read
 		string getReadName(void) const {return readName;} 								// Get the read name of the current read.
 		UINT32 getFrequency(void) {return frequency;}									// Get the frequency of the current read.
 		vector<MPlist> * getMatePairList(void) {return matePairList;} 					// Get the list of matepairs.
-		vector<Edge *> * getListOfEdgesForward(void){return listOfEdgesForward;}		// Get the list of edges that contain the forward string of the current read.
-		vector<UINT64> * getLocationOnEdgeForward(void){return locationOnEdgeForward;}	// Get the list of locations on the edges that contain the forward string of the current read.
-		vector<Edge *> * getListOfEdgesReverse(void){return listOfEdgesReverse;}		// Get the list of edges that contain the reverse string of the current read.
-		vector<UINT64> * getLocationOnEdgeReverse(void){return locationOnEdgeReverse;}	// Get the list of locations on the edges that contain the reverse string of the current read.
 		bool addMatePair(Read *r, UINT8 orientation, UINT64 datasetNumber);				// Add a matepair in the list.
 
 };

@@ -34,77 +34,9 @@ int main(int argc, char **argv)
 	parseArguments(argc, argv, pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength, startFromUnitigGraph, maxThreads, writeGraphSize);
 	Dataset *dataSet = new Dataset(pairedEndFileNames, singleEndFileNames, minimumOverlapLength);
 	OverlapGraph *overlapGraph;
-
-	if(startFromUnitigGraph) // Read the graph from unitig file
-	{
-		overlapGraph = new OverlapGraph();
-		overlapGraph->setDataset(dataSet);
-		overlapGraph->readGraphFromFile(allFileName+".unitig");
-		overlapGraph->sortEdges();
-	}
-	else // Build the graph from the scratch
-	{
-		HashTable *hashTable=new HashTable();
-		hashTable->insertDataset(dataSet, minimumOverlapLength);
-		overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName); //hashTable deleted by this function after building the graph
-		dataSet->saveReads(allFileName+"_sortedReads.fasta");
-		overlapGraph->sortEdges();
-		overlapGraph->saveGraphToFile(allFileName+".unitig");
-	}
-
-	overlapGraph->calculateFlow(allFileName+"_flow.input", allFileName+"_flow.output");
-	cout << "nodes: " << overlapGraph->getNumberOfNodes() << " edges: " << overlapGraph->getNumberOfEdges() << endl;
-	overlapGraph->printGraph(allFileName+"graph1.gdl", allFileName+"contigs1.fasta");
-
-	overlapGraph->removeAllSimpleEdgesWithoutFlow();
-
-	overlapGraph->calculateMeanAndSdOfInsertSize();
-
-
-
-	do
-	{
-		// Mate pair paths are used to simplify the graph in this step
-		cout << endl;
-		cout << "===============================================================================================================================================" <<endl;
-		cout << "FIRST LOOP ITERATION " << ++iteration << endl;
-		cout << "===============================================================================================================================================" <<endl;
-		overlapGraph->simplifyGraph();
-		counter = overlapGraph->findSupportByMatepairsAndMerge();
-	} while (counter > 0 && iteration < loopLimit); // To avoid infinite loops
-
-	overlapGraph->printGraph(allFileName+"graph2.gdl", allFileName+"contigs2.fasta");
-
-	iteration = 0;
-	do
-	{
-		// Scaffolder
-		cout << endl;
-		cout << "===============================================================================================================================================" <<endl;
-		cout << "SECOND LOOP ITERATION " << ++iteration << endl;
-		cout << "===============================================================================================================================================" <<endl;
-		overlapGraph->simplifyGraph();
-		counter = overlapGraph->scaffolder();
-
-	} while (counter > 0 && iteration < loopLimit);// To avoid infinite loops
-
-	overlapGraph->printGraph(allFileName+"graph3.gdl", allFileName+"contigs3.fasta");
-
-	iteration = 0;
-	do
-	{
-		// Coverage depth information is used to resolve ambiguity
-		cout << endl;
-		cout << "===============================================================================================================================================" <<endl;
-		cout << "THIRD LOOP ITERATION " << ++iteration << endl;
-		cout << "===============================================================================================================================================" <<endl;
-		overlapGraph->simplifyGraph();
-		counter = overlapGraph->resolveNodes();
-
-	} while (counter > 0 && iteration < loopLimit);// To avoid infinite loops
-
-	overlapGraph->printGraph(allFileName+"graph4.gdl", allFileName+"contigs4.fasta");
-
+	HashTable *hashTable=new HashTable();
+	hashTable->insertDataset(dataSet, minimumOverlapLength);
+	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName); //hashTable deleted by this function after building the graph also writes graph
 	delete dataSet;
 	delete overlapGraph;
 	CLOCKSTOP;

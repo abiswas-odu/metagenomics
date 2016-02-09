@@ -23,14 +23,6 @@ Read::Read(void)
 	superReadID = 0;
 	matePairList = new vector<MPlist>;
 	matePairList->resize(matePairList->size());						// Resize to 0 to reduce space.
-	listOfEdgesForward = new vector<Edge *>;
-	listOfEdgesForward->resize(listOfEdgesForward->size());			// Resize to 0 to reduce space.
-	listOfEdgesReverse = new vector<Edge *>;
-	listOfEdgesReverse->resize(listOfEdgesReverse->size());			// Resize to 0 to reduce space.
-	locationOnEdgeForward = new vector<UINT64>;
-	locationOnEdgeForward->resize(locationOnEdgeForward->size());	// Resize to 0 to reduce space.
-	locationOnEdgeReverse = new vector<UINT64>;
-	locationOnEdgeReverse->resize(locationOnEdgeReverse->size());	// Resize to 0 to reduce space.
 	read = new dna_bitset();
 }
 
@@ -49,14 +41,6 @@ Read::Read(const string & s)
 	superReadID = 0;
 	matePairList = new vector<MPlist>;
 	matePairList->resize(matePairList->size());						// Resize to 0 to reduce space.
-	listOfEdgesForward = new vector<Edge *>;
-	listOfEdgesForward->resize(listOfEdgesForward->size());			// Resize to 0 to reduce space.
-	listOfEdgesReverse = new vector<Edge *>;
-	listOfEdgesReverse->resize(listOfEdgesReverse->size());			// Resize to 0 to reduce space.
-	locationOnEdgeForward = new vector<UINT64>;
-	locationOnEdgeForward->resize(locationOnEdgeForward->size());	// Resize to 0 to reduce space.
-	locationOnEdgeReverse = new vector<UINT64>;
-	locationOnEdgeReverse->resize(locationOnEdgeReverse->size());	// Resize to 0 to reduce space.
 }
 
 /**********************************************************************************************************************
@@ -67,11 +51,6 @@ Read::~Read(void)
 	// delete all the pointers.
 	delete read;
 	delete matePairList;
-	delete listOfEdgesForward;
-	delete listOfEdgesReverse;
-	delete locationOnEdgeForward;
-	delete locationOnEdgeReverse;
-
 }
 
 /**********************************************************************************************************************

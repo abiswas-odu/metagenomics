@@ -57,16 +57,16 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength)
 	setHashTableSize(size);
 	UINT64 noOfReads=d->getNumberOfUniqueReads();
 
-	#pragma omp parallel for num_threads(1)
+	#pragma omp parallel for schedule(dynamic)
 	for(UINT64 i = 1; i <= noOfReads; i++)		// For each read in the dataset
 	{
 		hashRead(d->getReadFromID(i)); 								// Insert the read in the hash table.
 		//if(i%1000000 == 0)
 		//	cout << setw(10) << i << " reads inserted in the hash table. Hash collisions: " << setw(10) << numberOfHashCollision << endl;	// Print some statistics.
 	}
-	//cout << endl << "Total Hash collisions: " << numberOfHashCollision << endl;
-	/*UINT64 longestSize = 0, readID=1;
-	for(UINT64 i = 0 ; i < this->hashTableSize; i++)
+	cout << endl << "Total Hash collisions: " << numberOfHashCollision << endl;
+	UINT64 longestSize = 0, readID=1;
+	/*for(UINT64 i = 0 ; i < this->hashTableSize; i++)
 	{
 		if(hashTable->at(i)->size() > longestSize)	// Longest list in the hash table.
 		{
@@ -117,11 +117,7 @@ void HashTable::setHashTableSize(UINT64 size)
     // Ted: hashTable name should be changed. This can be called in the constructor.
 	hashTable = new vector < vector<UINT64> *>(size);
 	for(UINT64 i = 0; i < hashTable->size(); i++) // Initialize the hash table.
-	{
-		//vector<UINT64> * newList = new vector<UINT64>(0);
-		//hashTable->at(i)=newList;
 		hashTable->at(i)=NULL;
-	}
 }
 
 
