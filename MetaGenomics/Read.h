@@ -14,17 +14,6 @@
 
 class Edge;
 
-struct MPlist
-{
-	UINT64 matePairID;				// This list stores the list of ID's of the matepairs of the current read.
-	UINT8 matePairOrientation; 		// List of mate pair orientation.
-									// 0 = 00 means the reverse of this read and the reverse of the second read are matepairs.
-									// 1 = 01 means the reverse of this read and the forward of the second read are matepairs.
-									// 2 = 10 means the forward of this read and the reverse of the second read are matepairs.
-									// 3 = 11 means the forward of this read and the forward of the second read are matepairs.
-	UINT8 datasetNumber;			//Dataset number.
-};
-
 /**********************************************************************************************************************
 	Class to store a read.
 **********************************************************************************************************************/
@@ -35,8 +24,6 @@ class Read
 		UINT64 readNumber; 						// Unique Identification of the read.
 		string readName;
 		dna_bitset *read; 							// String representation of the read.
-		UINT32 frequency; 						// Frequency of the read. Number of times this read is present in the dataset. Used in some statistical analysis.
-		vector<MPlist> *matePairList;
 		string reverseComplement() const;
 	public:
 		bool isContainedRead;
@@ -57,8 +44,6 @@ class Read
 		UINT16 getReadLength(void) const {return read->getLength();} 								// Get the length of the string in the current read.
 		UINT64 getReadNumber(void) const {return readNumber;} 								// Get the read number of the current read.
 		string getReadName(void) const {return readName;} 								// Get the read name of the current read.
-		UINT32 getFrequency(void) {return frequency;}									// Get the frequency of the current read.
-		vector<MPlist> * getMatePairList(void) {return matePairList;} 					// Get the list of matepairs.
 		bool addMatePair(Read *r, UINT8 orientation, UINT64 datasetNumber);				// Add a matepair in the list.
 
 };

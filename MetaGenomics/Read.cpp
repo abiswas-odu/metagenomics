@@ -18,11 +18,8 @@ Read::Read(void)
 	// Initialize the variables.
 	readNumber = 0;
 	readName="";
-	frequency = 0;
 	isContainedRead = false;
 	superReadID = 0;
-	matePairList = new vector<MPlist>;
-	matePairList->resize(matePairList->size());						// Resize to 0 to reduce space.
 	read = new dna_bitset();
 }
 
@@ -36,11 +33,8 @@ Read::Read(const string & s)
 	setFrequency(1);
 	readNumber = 0;
 	readName="";
-	frequency = 0;
 	isContainedRead = false;
 	superReadID = 0;
-	matePairList = new vector<MPlist>;
-	matePairList->resize(matePairList->size());						// Resize to 0 to reduce space.
 }
 
 /**********************************************************************************************************************
@@ -50,7 +44,6 @@ Read::~Read(void)
 {
 	// delete all the pointers.
 	delete read;
-	delete matePairList;
 }
 
 /**********************************************************************************************************************
@@ -92,7 +85,6 @@ bool Read::setReadName(string name)
 bool Read::setFrequency(UINT32 freq)
 {
 	if(freq < 1) MYEXIT("Frequency less than 1.");
-	frequency = freq;												// Set the frequency of the read.
 	return true;
 }
 
@@ -105,42 +97,6 @@ string Read::reverseComplement() const {
 /**********************************************************************************************************************
 	This function adds a matpair
 **********************************************************************************************************************/
-bool Read::addMatePair(Read *r, UINT8 orientation, UINT64 datasetNumber)
-{
-	UINT64 ID = r->getReadNumber(), i;
-	if(matePairList->empty()) 							//matePairList is empty.
-	{
-		MPlist newMP;
-		newMP.matePairID = ID;
-		newMP.matePairOrientation = orientation;
-		newMP.datasetNumber = datasetNumber;
-		matePairList->push_back(newMP);
-	}
-	else	// matePairList is not empty.
-	{
-		for(i = 0; i < matePairList->size(); i++) // Check if the matepair already present in the list.
-		{
-			if(matePairList->at(i).matePairID == ID && matePairList->at(i).matePairOrientation == orientation && matePairList->at(i).datasetNumber == datasetNumber) // Already present in the list.
-			{
-				//cout<< this->getReadNumber()<< " " << r->getReadNumber() << " already present in the dataset" << endl;
-				//cout<< this->getStringForward() << " " << r->getStringForward() << endl;
-				break;
-			}
-		}
-		if (i == matePairList->size()) // matePairList does not contain ID and orientation in the list
-		{
-			MPlist newMP;
-			newMP.matePairID = ID;
-			newMP.matePairOrientation = orientation;
-			newMP.datasetNumber = datasetNumber;
-			matePairList->push_back(newMP);
-		}
-	}
-	matePairList->resize(matePairList->size());					// Resize the list to reduce space.
-
-	return true;
-}
-
 bool Read::compareReadOverlap(UINT64 seq1Start, UINT64 seq1Len, Read * seq2, UINT64 seq2Start, UINT64 seq2Len, UINT64 orient)
 {
 	return read->compareSubString(seq1Start,seq1Len,seq2->read,seq2Start,seq2Len, orient);

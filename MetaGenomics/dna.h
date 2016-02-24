@@ -9,6 +9,8 @@
 
 #define BASE_MASK 0x3	/* binary: 11 */
 
+#define HALF_FRAG_SIZE 4	/* Half of the number of bits used as the bit storage block. Here it is 32 so it is set to 16.*/
+
 /* useful constants */
 enum
 {
@@ -53,7 +55,7 @@ public:
 		m_len = dna_len;
 
 		/* number of bytes necessary to store dna_str as a bitset */
-		size_t dna_bytes = (dna_len / 4) + (dna_len % 4 != 0);
+		size_t dna_bytes = (dna_len / HALF_FRAG_SIZE) + (dna_len % HALF_FRAG_SIZE != 0);
 
 		m_data = new uint8_t[dna_bytes];
 
@@ -62,71 +64,25 @@ public:
 		/* for each base of the DNA sequence */
 		for (size_t i = 0; i < dna_len; i++)
 		{
-			uint8_t shift = 6 - 2*(i % 4);
+			uint32_t shift = (HALF_FRAG_SIZE*2-2) - 2*(i % HALF_FRAG_SIZE);
 
 			switch (dna_str[i])
 			{
 			case 'A':
-				m_data[i/4] |= BASE_A << shift;
+				m_data[i/HALF_FRAG_SIZE] |= BASE_A << shift;
 				break;
 			case 'C':
-				m_data[i/4] |= BASE_C << shift;
+				m_data[i/HALF_FRAG_SIZE] |= BASE_C << shift;
 				break;
 			case 'G':
-				m_data[i/4] |= BASE_G << shift;
+				m_data[i/HALF_FRAG_SIZE] |= BASE_G << shift;
 				break;
 			case 'T':
-				m_data[i/4] |= BASE_T << shift;
+				m_data[i/HALF_FRAG_SIZE] |= BASE_T << shift;
 				break;
 			default:
 				throw std::invalid_argument("invalid DNA base");
 			}
-
-			shift = (shift == 0) ? 6 : shift-2;
-		}
-	}
-
-
-	/**
-	 * @brief setter method
-	 * @param dna_str a string containing a DNA sequence (e.g. "ATGCA...")
-	 * @param dna_len length of the DNA sequence
-	 */
-	void resetRead(const char* dna_str, const size_t dna_len)
-	{
-		m_len = dna_len;
-
-		/* number of bytes necessary to store dna_str as a bitset */
-		size_t dna_bytes = (dna_len / 4) + (dna_len % 4 != 0);
-
-		m_data = new uint8_t[dna_bytes];
-
-		std::memset(m_data, 0, dna_bytes);
-
-		/* for each base of the DNA sequence */
-		for (size_t i = 0; i < dna_len; i++)
-		{
-			uint8_t shift = 6 - 2*(i % 4);
-
-			switch (dna_str[i])
-			{
-			case 'A':
-				m_data[i/4] |= BASE_A << shift;
-				break;
-			case 'C':
-				m_data[i/4] |= BASE_C << shift;
-				break;
-			case 'G':
-				m_data[i/4] |= BASE_G << shift;
-				break;
-			case 'T':
-				m_data[i/4] |= BASE_T << shift;
-				break;
-			default:
-				throw std::invalid_argument("invalid DNA base");
-			}
-
-			shift = (shift == 0) ? 6 : shift-2;
 		}
 	}
 	/**
@@ -146,53 +102,14 @@ public:
 		/* for each base of the DNA sequence */
 		for (int i = m_len-1; i >= 0; i--)
 		{
-			uint8_t shift = 6 - 2*(i % 4);
+			uint8_t shift = (HALF_FRAG_SIZE*2-2) - 2*(i % HALF_FRAG_SIZE);
 
 			/* get the i-th DNA base */
-			uint8_t base = (m_data[i/4] & (BASE_MASK << shift)) >> shift;
+			uint8_t base = (m_data[i/HALF_FRAG_SIZE] & (BASE_MASK << shift)) >> shift;
 			dna_str += strRevCArr[base];
 		}
 		return dna_str;
 	}
-
-	/**
-	 * @brief returns the stored DNA sequence as a C string
-	 */
-	char* to_c_string () const
-	{
-		char* dna_str = new char[m_len+1];
-		char *ch;
-		/* for each base of the DNA sequence */
-		for (size_t i = 0; i < m_len; i++)
-		{
-			uint8_t shift = 6 - 2*(i % 4);
-
-			/* get the i-th DNA base */
-			uint8_t base = (m_data[i/4] & (BASE_MASK << shift)) >> shift;
-
-			switch (base)
-			{
-			case BASE_A:
-				dna_str[i] = 'A';
-				break;
-			case BASE_C:
-				dna_str[i] = 'C';
-				break;
-			case BASE_G:
-				dna_str[i] = 'G';
-				break;
-			case BASE_T:
-				dna_str[i] = 'T';
-				break;
-			default:
-				throw std::runtime_error("Invalid DNA base");
-			}
-		}
-		dna_str[m_len] = '\0';
-		str_reverse(dna_str);
-		return dna_str;
-	}
-
 	/**
 		* @brief returns the stored DNA sequence as a C++ string
 	 */
@@ -203,9 +120,9 @@ public:
 		/* for each base of the DNA sequence */
 		for (size_t i = 0; i < m_len; i++)
 		{
-			uint8_t shift = 6 - 2*(i % 4);
+			uint8_t shift = (HALF_FRAG_SIZE*2-2) - 2*(i % HALF_FRAG_SIZE);
 			/* get the i-th DNA base */
-			uint8_t base = (m_data[i/4] & (BASE_MASK << shift)) >> shift;
+			uint8_t base = (m_data[i/HALF_FRAG_SIZE] & (BASE_MASK << shift)) >> shift;
 			dna_str += strArr[base];
 		}
 		return dna_str;

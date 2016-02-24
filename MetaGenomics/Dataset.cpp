@@ -29,6 +29,7 @@ Dataset::Dataset(void)
 	minimumOverlapLength = 0;
 	shortestReadLength = 0XFFFFFFFFFFFFFFFF;
 	longestReadLength = 0X0000000000000000;
+	reads = new vector<Read *>;
 
 }
 
@@ -96,21 +97,6 @@ void Dataset::saveReads(string fileName)
 	outputFile.close();
 }
 
-
-/**********************************************************************************************************************
-	This function reads mate pair information from the paired end files.
-**********************************************************************************************************************/
-
-void Dataset::readMatePairsFromFile(void)
-{
-	for(UINT64 i = 0; i < pairedEndDatasetFileNames.size(); i++) // Store mate-pair information for each of the datasets.
-	{
-		storeMatePairInformation(pairedEndDatasetFileNames.at(i), minimumOverlapLength, i);
-	}
-	this->printDataset();
-}
-
-
 /**********************************************************************************************************************
 	This function reads the dataset from FASTA/FASTQ files
 **********************************************************************************************************************/
@@ -171,13 +157,11 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 		    *p = toupper(*p);
 		if(line1.length() > minOverlap && testRead(line1) ) // Test the read is of good quality.
 		{
-			Read *r1=new Read;
+
 			line1ReverseComplement = reverseComplement(line1);
 			if(line1.compare(line1ReverseComplement) < 0) // Store lexicographically smaller between the read and its reverse complement.
-				r1->setRead(line1);
-			else
-				r1->setRead(line1ReverseComplement);
-
+				line1ReverseComplement= line1;
+			Read *r1=new Read(line1ReverseComplement);
 			UINT64 len = r1->getReadLength();
 			r1->setReadName(line0);
 			if(len > longestReadLength)
@@ -213,151 +197,6 @@ void Dataset::sortReads(void)
 	CLOCKSTOP;
 }
 
-
-/**********************************************************************************************************************
-	This function reads the file again and store matepair infromation.
-**********************************************************************************************************************/
-bool Dataset::storeMatePairInformation(string fileName, UINT64 minOverlap, UINT64 datasetNumber)
-{
-	CLOCKSTART;
-	cout << "Store paired-end information of dataset: " << datasetNumber << " from file: " << fileName << endl;
-
-	UINT64 goodMatePairs = 0, badMatePairs = 0;
-	ifstream myFile;
-	myFile.open (fileName.c_str());
-	if(myFile == NULL)
-		MYEXIT("Unable to open file: "+fileName)
-	vector<string> line;
-	string line1, line2, text, line1ReverseComplement,line2ReverseComplement;
-	Read r1, r2;
-
-	enum FileType { FASTA, FASTQ, UNDEFINED};
-	FileType fileType = UNDEFINED;
-
-	while(!myFile.eof())
-	{
-		if(goodMatePairs+badMatePairs != 0 && (goodMatePairs+badMatePairs)%1000000 == 0)
-		{
-			cout << setw(10) << goodMatePairs + badMatePairs << " reads processed in store mate-pair information." << setw(10) << goodMatePairs << " reads in good mate-pairs." << setw(10) << badMatePairs << " reads in bad mate-pairs." << endl;
-		}
-		if(fileType == UNDEFINED)
-		{
-			getline (myFile,text);
-			if(text[0] == '>')
-				fileType = FASTA;
-			else if(text[0] == '@')
-				fileType = FASTQ;
-			else
-				MYEXIT("Unknown input file format.");
-			myFile.seekg(0, ios::beg);
-		}
-		line.clear();
-		if(fileType == FASTA)	 				// Fasta file
-		{
-			getline (myFile,text);
-			line.push_back(text);
-			getline (myFile,text,'>');
-			line.push_back(text);
-			getline (myFile,text);
-			line.push_back(text);
-			getline (myFile,text,'>');
-			line.push_back(text);
-			line.at(1).erase(std::remove(line.at(1).begin(), line.at(1).end(), '\n'), line.at(1).end());
-			line1 = line.at(1);					// The first string is in the 2nd line.
-			line.at(3).erase(std::remove(line.at(3).begin(), line.at(3).end(), '\n'), line.at(3).end());
-			line2 = line.at(3); 				// The second string is in the 4th line.
-		}
-		else if(fileType == FASTQ)  			// Fastq file.
-		{
-			for(UINT64 i = 0; i < 8; i++)		// Read the remaining 7 lines. Total of 8 lines represent two sequence in a fastq file.
-			{
-				getline (myFile,text);
-				line.push_back(text);
-			}
-			line1 = line.at(1); 				// The first string is in the 2nd line.
-			line2 = line.at(5);					// The second string is in the 6th lien.
-		}
-
-		for (std::string::iterator p = line1.begin(); line1.end() != p; ++p) // Change the case
-				    *p = toupper(*p);
-
-		for (std::string::iterator p = line2.begin(); line2.end() != p; ++p) // Change the case
-				    *p = toupper(*p);
-
-		if(line1.length() > minOverlap && line2.length() > minOverlap && testRead(line1) && testRead(line2))	// Test if both reads are of good quality.
-		{
-
-			Read * r1 = getReadFromString(line1),* r2 = getReadFromString(line2);
-
-			if (r1->superReadID != 0) 					// This read is contained by the superRead
-				r1 = getReadFromID(r1->superReadID);
-
-			if (r2->superReadID != 0)					// This read is contained by the superRead.
-				r2 = getReadFromID(r2->superReadID);
-
-			goodMatePairs += 2;
-			UINT16 orient1, orient2;
-			string read1Froward = r1->getStringForward();
-			string read2Froward = r2->getStringForward();
-
-			orient1 = read1Froward.find(line1) != string::npos ? 1 : 0;
-			orient2 = read2Froward.find(line2) != string::npos ? 1 : 0;
-
-			r1->addMatePair(r2, orient1 * 2 + orient2, datasetNumber); 	// Two bits are used to represent the orientation of the reads in a matepair.
-			r2->addMatePair(r1, orient1 + orient2 * 2, datasetNumber);	// 0 = 00 means the reverse of r1 and the reverse of r2 are matepairs.
-																		// 1 = 01 means the reverse of r1 and the forward of r2 are matepairs.
-																		// 2 = 10 means the forward of r1 and the reverse of r2 are matepairs.
-																		// 3 = 11 means the forward of r1 and the forward of r2 are matepairs.
-		}
-		else
-			badMatePairs +=2;
-	}
-	cout << endl << "Dataset: " << setw(2) << datasetNumber <<  endl;
-	cout << "File name: " << fileName << endl;
-	cout << setw(10) << goodMatePairs << " reads in " << setw(10) << goodMatePairs/2 << " mate-pairs are good." << endl;
-	cout << setw(10) << badMatePairs << " reads in " << setw(10) << badMatePairs/2 << " mate-pairs are discarded." << endl << endl;
-	myFile.close();
-	CLOCKSTOP;
-	return true;
-}
-
-
-/**********************************************************************************************************************
-	This function returns the number of unique reads and assign ID to the reads->
-**********************************************************************************************************************/
-bool Dataset::removeDupicateReads(void)
-{
-	CLOCKSTART;
-	UINT64 j = 0;
-	Read *temp;
-	for(UINT64 i = 0; i < reads->size(); i++)		// Move the unique reads in the top of the sorted list. Store the frequencey of the duplicated reads.
-	{
-		if(reads->at(j)->getStringForward()!= reads->at(i)->getStringForward())
-		{
-			j++;
-			temp = reads->at(j);
-			reads->at(j) = reads->at(i);
-			reads->at(i) = temp;
-		}
-		else if(i!=j)
-			reads->at(j)->setFrequency(reads->at(j)->getFrequency() + 1);
-	}
-	numberOfUniqueReads = j+1;
-	cout <<"Number of unique reads: " << numberOfUniqueReads << endl;
-	for(UINT64 i = 0 ; i < reads->size(); i++) 		// Assing ID's to the reads.
-	{
-		if(i < getNumberOfUniqueReads())
-			reads->at(i)->setReadNumber(i + 1);
-		else
-			delete reads->at(i); 					// Free the unused reads.
-	}
-	reads->resize(numberOfUniqueReads);				//Resize the list.
-	CLOCKSTOP;
-	return true;
-}
-
-
-
 /**********************************************************************************************************************
 	This function returns the number of reads
 **********************************************************************************************************************/
@@ -373,35 +212,6 @@ UINT64 Dataset::getNumberOfReads(void)
 UINT64 Dataset::getNumberOfUniqueReads(void)
 {
 	return numberOfUniqueReads;
-}
-
-
-/**********************************************************************************************************************
-	Print all the reads in the dataset. For debugging only.
-**********************************************************************************************************************/
-bool Dataset::printDataset(void)
-{
-	CLOCKSTART;
-	cout << "Printing reads in the dataset" << endl;
-	cout << "Number of reads: " << getNumberOfReads() << endl;
-	cout << "Number of unique reads: " << getNumberOfUniqueReads() << endl;
-	for(UINT64 i = 0; i < reads->size(); i++)
-	{
-		if(i==20) break; 	// Print only first 20 reads
-		cout <<  setw(10) << reads->at(i)->getReadNumber() << " " << reads->at(i)->getStringForward() << setw(10) << reads->at(i)->getFrequency() << endl;
-	}
-	cout << endl << "Printing matepairs" << endl;
-
-	for(UINT64 i = 0; i < reads->size(); i++)
-	{
-		if(i==20) break; // Print only the matepairs of the first 20 reads.
-		cout << "Mate-Pair 1" << setw(10) << reads->at(i)->getReadNumber() << " " << reads->at(i)->getStringForward() << endl;
-		vector<MPlist> * matePairList = reads->at(i)->getMatePairList();
-		for(UINT64 j = 0; j < matePairList->size(); j++)
-			cout << "Mate-Pair 2" << setw(10) << matePairList->at(j).matePairID << " " << getReadFromID(matePairList->at(j).matePairID)->getStringForward() << " Orientation: "<< (int)reads->at(i)->getMatePairList()->at(j).matePairOrientation<< " Dataset: " << (int)reads->at(i)->getMatePairList()->at(j).datasetNumber << endl;
-	}
-	CLOCKSTOP;
-	return true;
 }
 
 /**********************************************************************************************************************

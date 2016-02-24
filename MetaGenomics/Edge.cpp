@@ -134,3 +134,5 @@ bool Edge::setReverseEdge(Edge * edge)
 	reverseEdge = edge;
 	return true;
 }
+
+

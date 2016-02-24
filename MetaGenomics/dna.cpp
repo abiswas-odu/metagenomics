@@ -35,13 +35,13 @@ bool dna_bitset::compareSubString (UINT64 seq1Start, UINT64 seq1Len, const dna_b
 	{
 		for (int i = seq1Start, j = seq2Start; i < seq1Start+seq1Len; i++,j++)
 		{
-			uint8_t shift1 = 6 - 2*(i % 4);
+			uint8_t shift1 = (HALF_FRAG_SIZE*2-2) - 2*(i % HALF_FRAG_SIZE);
 			///* get the i-th DNA base from subject
-			uint8_t base1 = (m_data[i/4] & (BASE_MASK << shift1)) >> shift1;
+			uint8_t base1 = (m_data[i/HALF_FRAG_SIZE] & (BASE_MASK << shift1)) >> shift1;
 
-			uint8_t shift2 = 6 - 2*(j % 4);
+			uint8_t shift2 = (HALF_FRAG_SIZE*2-2) - 2*(j % HALF_FRAG_SIZE);
 			///* get the j-th DNA base from query
-			uint8_t base2 = (seq2->m_data[j/4] & (BASE_MASK << shift2)) >> shift2;
+			uint8_t base2 = (seq2->m_data[j/HALF_FRAG_SIZE] & (BASE_MASK << shift2)) >> shift2;
 
 			if(base1!=base2)
 				return false;
@@ -51,13 +51,13 @@ bool dna_bitset::compareSubString (UINT64 seq1Start, UINT64 seq1Len, const dna_b
 	{
 		for (int i = seq1Start, j = seq2->m_len-seq2Start-1; i < seq1Start+seq1Len; i++,j--)
 		{
-			uint8_t shift1 = 6 - 2*(i % 4);
+			uint8_t shift1 = (HALF_FRAG_SIZE*2-2) - 2*(i % HALF_FRAG_SIZE);
 			///* get the i-th DNA base from subject
-			uint8_t base1 = (m_data[i/4] & (BASE_MASK << shift1)) >> shift1;
+			uint8_t base1 = (m_data[i/HALF_FRAG_SIZE] & (BASE_MASK << shift1)) >> shift1;
 
-			uint8_t shift2 = 6 - 2*(j % 4);
+			uint8_t shift2 = (HALF_FRAG_SIZE*2-2) - 2*(j % HALF_FRAG_SIZE);
 			///* get the j-th DNA base from query
-			uint8_t base2 = ~((seq2->m_data[j/4] & (BASE_MASK << shift2)) >> shift2) & BASE_MASK;
+			uint8_t base2 = ~((seq2->m_data[j/HALF_FRAG_SIZE] & (BASE_MASK << shift2)) >> shift2) & BASE_MASK;
 
 			if(base1!=base2)
 				return false;

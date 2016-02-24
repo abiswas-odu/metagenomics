@@ -47,7 +47,7 @@ HashTable::HashTable(void)
 /**********************************************************************************************************************
 	Add Database in hashTable
 **********************************************************************************************************************/
-bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength)
+bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parallelThreadPoolSize)
 {
 	CLOCKSTART;
 	dataSet=d;
@@ -57,16 +57,24 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength)
 	setHashTableSize(size);
 	UINT64 noOfReads=d->getNumberOfUniqueReads();
 
-	#pragma omp parallel for schedule(dynamic)
+
+	omp_lock_t *lock = new omp_lock_t[size];
+	#pragma omp parallel for
+	for (UINT64 i=0; i<size; i++)
+		omp_init_lock(&(lock[i]));
+
+
+	#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
 	for(UINT64 i = 1; i <= noOfReads; i++)		// For each read in the dataset
 	{
-		hashRead(d->getReadFromID(i)); 								// Insert the read in the hash table.
+		hashRead(d->getReadFromID(i), lock); 								// Insert the read in the hash table.
 		//if(i%1000000 == 0)
 		//	cout << setw(10) << i << " reads inserted in the hash table. Hash collisions: " << setw(10) << numberOfHashCollision << endl;	// Print some statistics.
 	}
+	delete lock;
 	cout << endl << "Total Hash collisions: " << numberOfHashCollision << endl;
-	UINT64 longestSize = 0, readID=1;
-	/*for(UINT64 i = 0 ; i < this->hashTableSize; i++)
+	/*UINT64 longestSize = 0, readID=1;
+	for(UINT64 i = 0 ; i < this->hashTableSize; i++)
 	{
 		if(hashTable->at(i)->size() > longestSize)	// Longest list in the hash table.
 		{
@@ -76,6 +84,7 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength)
 
 	}
 	cout <<"Longest list size in the hash table is: " << longestSize << endl << "Read: " << endl << this->dataSet->getReadFromID(readID & 0X3FFFFFFFFFFFFFF)->getStringForward() << endl << this->dataSet->getReadFromID(readID & 0X3FFFFFFFFFFFFFF)->getStringReverse() << endl << "Orientation: " << (readID >> 62) << endl;*/
+
 	CLOCKSTOP;
 	return true;
 }
@@ -86,7 +95,7 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength)
 /**********************************************************************************************************************
 	Insert a read in the hashTable
 **********************************************************************************************************************/
-bool HashTable::hashRead(const Read *read)
+bool HashTable::hashRead(const Read *read, omp_lock_t *lock)
 {
 	string forwardRead = read->getStringForward();
 	string reverseRead = read->getStringReverse();
@@ -96,10 +105,10 @@ bool HashTable::hashRead(const Read *read)
 	string prefixReverse = reverseRead.substr(0,hashStringLength);											// Prefix of the reverse string.
 	string suffixReverse = reverseRead.substr(reverseRead.length() - hashStringLength,hashStringLength);	// Suffix of the reverse string.
 
-	insertIntoTable(read, prefixForward, 0); // Insert the prefix of the forward string in the hash table.
-	insertIntoTable(read, suffixForward, 1); // Insert the suffix of the forward string in the hash table.
-	insertIntoTable(read, prefixReverse, 2); // Insert the prefix of the reverse string in the hash table.
-	insertIntoTable(read, suffixReverse, 3); // Insert the suffix of the reverse string in the hash table.
+	insertIntoTable(read, prefixForward, 0, lock); // Insert the prefix of the forward string in the hash table.
+	insertIntoTable(read, suffixForward, 1, lock); // Insert the suffix of the forward string in the hash table.
+	insertIntoTable(read, prefixReverse, 2, lock); // Insert the prefix of the reverse string in the hash table.
+	insertIntoTable(read, suffixReverse, 3, lock); // Insert the suffix of the reverse string in the hash table.
 	return true;
 }
 
@@ -115,9 +124,7 @@ void HashTable::setHashTableSize(UINT64 size)
 	cout << "Hash Table size set to: " << size << endl;
 	hashTableSize=size;
     // Ted: hashTable name should be changed. This can be called in the constructor.
-	hashTable = new vector < vector<UINT64> *>(size);
-	for(UINT64 i = 0; i < hashTable->size(); i++) // Initialize the hash table.
-		hashTable->at(i)=NULL;
+	hashTable = new vector < vector<UINT64> *>(hashTableSize);
 }
 
 
@@ -150,11 +157,10 @@ UINT64 HashTable::hashFunction(const string & subString) const
 
 
 
-
 /**********************************************************************************************************************
 	Insert a subString in a hashTable
 **********************************************************************************************************************/
-bool HashTable::insertIntoTable(const Read *read, const string & subString, const UINT64 & orientation)
+bool HashTable::insertIntoTable(const Read *read, const string & subString, const UINT64 & orientation, omp_lock_t *lock)
 {
 	UINT64 ID = read->getReadNumber() | (orientation << 62); 	// Most significant two bits are used to store the orientation of the string in the read.
 																// 00 = 0 means prefix of the forward string.
@@ -166,40 +172,50 @@ bool HashTable::insertIntoTable(const Read *read, const string & subString, cons
 
 	UINT64 index = hashFunction(subString);						// Get the index using the hash function.
 
-	#pragma omp critical(updateHashTable)
+	while(1)
 	{
-		while(hashTable->at(index))
-		{
-			UINT64 data = hashTable->at(index)->at(0);
-			// CP: explain these two bit operations
-			// The least significant 62 bits are used to store the read ID
-			// Ted: readNumber =   00111111 11111111 11111111 11111111 11111111 11111111 11111111 11111111
-			//                   & data
-			//                 =   62 bits of the right most bit
-			UINT64 readNumber = data & 0X3FFFFFFFFFFFFFFF;
-			// The most significant 2 bits are used to store the orientation.
-			UINT64 orient = data >> 62;
-			// Orientation 0 or 1 means that we took the forward string of the read. Otherwise we took the reverse string of the read.
-			string str = (orient == 0 || orient == 1) ? dataSet->getReadFromID(readNumber)->getStringForward() : dataSet->getReadFromID(readNumber)->getStringReverse();
-			// Orientation 0 or 2 means that we took the prefix of the string. Otherwise we took the suffix of the read.
-			string subStr = (orient == 0 || orient == 2) ? str.substr(0,hashStringLength) : str.substr(str.length() - hashStringLength, hashStringLength);
-			if(subStr == subString)
-					break;
-			numberOfHashCollision++;
-			currentCollision++;
-			index = (index == getHashTableSize() - 1) ? 0: index + 1; 	// Increment the index
-		}
+		bool ifEmpty=false;
+		UINT64 data = 0;
+		omp_set_lock(&(lock[index]));
 		if(hashTable->at(index)==NULL)
 		{
-			vector<UINT64> * newList = new vector<UINT64>;				// Add the string in the new list.
-			newList->reserve(3);
-			newList->push_back(ID);
-			hashTable->at(index)=newList;
+			vector<UINT64> * newList = new vector<UINT64>(1);				// Add the string in the new list.
+			newList->at(0)=ID;
+			#pragma omp critical
+			{
+				hashTable->at(index)=newList;
+			}
+			ifEmpty=true;
 		}
 		else
 		{
-			hashTable->at(index)->push_back(ID);							// Add the string in the existing list.
+			data = hashTable->at(index)->at(0);
 		}
+		omp_unset_lock(&(lock[index]));
+		if(ifEmpty)
+			break;
+		// CP: explain these two bit operations
+		// The least significant 62 bits are used to store the read ID
+		// Ted: readNumber =   00111111 11111111 11111111 11111111 11111111 11111111 11111111 11111111
+		//                   & data
+		//                 =   62 bits of the right most bit
+		UINT64 readNumber = data & 0X3FFFFFFFFFFFFFFF;
+		// The most significant 2 bits are used to store the orientation.
+		UINT64 orient = data >> 62;
+		// Orientation 0 or 1 means that we took the forward string of the read. Otherwise we took the reverse string of the read.
+		string str = (orient == 0 || orient == 1) ? dataSet->getReadFromID(readNumber)->getStringForward() : dataSet->getReadFromID(readNumber)->getStringReverse();
+		// Orientation 0 or 2 means that we took the prefix of the string. Otherwise we took the suffix of the read.
+		string subStr = (orient == 0 || orient == 2) ? str.substr(0,hashStringLength) : str.substr(str.length() - hashStringLength, hashStringLength);
+		if(subStr == subString)
+		{
+			omp_set_lock(&(lock[index]));
+			hashTable->at(index)->push_back(ID);							// Add the string in the existing list.
+			omp_unset_lock(&(lock[index]));
+			break;
+		}
+		numberOfHashCollision++;
+		currentCollision++;
+		index = (index == getHashTableSize() - 1) ? 0: index + 1; 	// Increment the index
 	}
 
 	/*if(currentCollision > 1000)

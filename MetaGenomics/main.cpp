@@ -18,15 +18,13 @@
 
 
 
-void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, vector<string> & singleEndFileNames,string & allFileName, UINT64 & minimumOverlapLength, bool & startFromUnitigGraph, UINT64 & maxthreads, UINT64 & writeGraphSize);
+void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, vector<string> & singleEndFileNames,string & allFileName, UINT64 & minimumOverlapLength, bool & startFromUnitigGraph, UINT64 & maxThreads, UINT64 & writeGraphSize);
 
 int main(int argc, char **argv)
 {
 	CLOCKSTART;
 	UINT64 minimumOverlapLength;
 	vector<string> pairedEndFileNames, singleEndFileNames;
-	UINT64 counter;
-	UINT64 iteration = 0;
 	string allFileName;
 	bool startFromUnitigGraph = false;
 	UINT64 maxThreads = DEF_THREAD_COUNT;
@@ -35,7 +33,7 @@ int main(int argc, char **argv)
 	Dataset *dataSet = new Dataset(pairedEndFileNames, singleEndFileNames, minimumOverlapLength);
 	OverlapGraph *overlapGraph;
 	HashTable *hashTable=new HashTable();
-	hashTable->insertDataset(dataSet, minimumOverlapLength);
+	hashTable->insertDataset(dataSet, minimumOverlapLength,maxThreads);
 	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName); //hashTable deleted by this function after building the graph also writes graph
 	delete dataSet;
 	delete overlapGraph;
