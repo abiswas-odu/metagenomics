@@ -26,7 +26,6 @@ class Read
 		dna_bitset *read; 							// String representation of the read.
 		string reverseComplement() const;
 	public:
-		bool isContainedRead;
 		UINT64 superReadID;						// 0 = not a contained read
 												// otherwise superReadID contains the ID of the uniqe super read.
 		Read(void);								// Default constructor.
@@ -35,7 +34,6 @@ class Read
 
 		bool setRead(const string & s); 		// Set the read.
 		bool setReadNumber(UINT64 id); 			// Set the read number.
-		bool setFrequency(UINT32 freq);			// Set the frequency of the read.
 		bool setReadName(string name);
 
 		bool compareReadOverlap(UINT64 seq1Start, UINT64 seq1Len, Read * seq2, UINT64 seq2Start, UINT64 seq2Len, UINT64 orient);
@@ -45,7 +43,6 @@ class Read
 		UINT64 getReadNumber(void) const {return readNumber;} 								// Get the read number of the current read.
 		string getReadName(void) const {return readName;} 								// Get the read name of the current read.
 		bool addMatePair(Read *r, UINT8 orientation, UINT64 datasetNumber);				// Add a matepair in the list.
-
 };
 
 #endif /* READS_H_ */

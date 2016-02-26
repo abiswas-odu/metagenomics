@@ -255,18 +255,11 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 
 /**********************************************************************************************************************
 	This function check if a read contains other small reads. If a read is contained in more than one super read
-	then it is assigned to the longest such super read.
+	then it is assigned to the longest such super read. Also duplicate reads are marked
 **********************************************************************************************************************/
 void OverlapGraph::markContainedReads(string fnamePrefix)
 {
 	CLOCKSTART;
-
-	/*if(dataSet->longestReadLength == dataSet->shortestReadLength) // If all reads are of same length, then no need to do look for contained reads.
-	{
-		cout << "All reads are of same length. No contained reads." << endl;
-		CLOCKSTOP;
-		return;
-	}*/
 	#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
 	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
 	{
@@ -390,7 +383,6 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 		}
 	}
 	return false;
-
 }*/
 
 bool OverlapGraph::checkOverlapForContainedRead(string read1, Read *read2, UINT64 orient, UINT64 start)

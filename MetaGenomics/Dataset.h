@@ -25,9 +25,6 @@ class Dataset
 		string reverseComplement(const string & read); 		// Get the reverse complement of a string.
 		bool testRead(const string & read); 				// Test if the read is good. Contains only {A,C,G,T} and does not contain more than 80% of same base.
 															// The dataset contains only good quality reads.
-		bool storeMatePairInformation(string fileName, UINT64 minOverlap, UINT64 datasetNumber); 	// Read the input file again and store mate pair information.
-		void sortReads(void);								// Ted: sort the reads lexicographically.
-
 	public:
 		vector<string> pairedEndDatasetFileNames;
 		vector<string> singleEndDatasetFileNames;

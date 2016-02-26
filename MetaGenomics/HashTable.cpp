@@ -58,9 +58,9 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parall
 	UINT64 noOfReads=d->getNumberOfUniqueReads();
 
 
-	omp_lock_t *lock = new omp_lock_t[size];
+	omp_lock_t *lock = new omp_lock_t[1000000];
 	#pragma omp parallel for
-	for (UINT64 i=0; i<size; i++)
+	for (UINT64 i=0; i<1000000; i++)
 		omp_init_lock(&(lock[i]));
 
 
@@ -68,22 +68,21 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parall
 	for(UINT64 i = 1; i <= noOfReads; i++)		// For each read in the dataset
 	{
 		hashRead(d->getReadFromID(i), lock); 								// Insert the read in the hash table.
-		//if(i%1000000 == 0)
-		//	cout << setw(10) << i << " reads inserted in the hash table. Hash collisions: " << setw(10) << numberOfHashCollision << endl;	// Print some statistics.
+		if(i%1000000 == 0)
+			cout << setw(10) << i << " reads inserted in the hash table. Hash collisions: " << setw(10) << numberOfHashCollision << endl;	// Print some statistics.
 	}
 	delete lock;
 	cout << endl << "Total Hash collisions: " << numberOfHashCollision << endl;
-	/*UINT64 longestSize = 0, readID=1;
+	UINT64 longestSize = 0, readID=1;
 	for(UINT64 i = 0 ; i < this->hashTableSize; i++)
 	{
-		if(hashTable->at(i)->size() > longestSize)	// Longest list in the hash table.
+		if(hashTable->at(i)!=NULL && hashTable->at(i)->size() > longestSize)	// Longest list in the hash table.
 		{
 			longestSize = hashTable->at(i)->size();
 			readID = hashTable->at(i)->at(0);
 		}
-
 	}
-	cout <<"Longest list size in the hash table is: " << longestSize << endl << "Read: " << endl << this->dataSet->getReadFromID(readID & 0X3FFFFFFFFFFFFFF)->getStringForward() << endl << this->dataSet->getReadFromID(readID & 0X3FFFFFFFFFFFFFF)->getStringReverse() << endl << "Orientation: " << (readID >> 62) << endl;*/
+	cout <<"Longest list size in the hash table is: " << longestSize << endl << "Read: " << endl << this->dataSet->getReadFromID(readID & 0X3FFFFFFFFFFFFFF)->getStringForward() << endl << this->dataSet->getReadFromID(readID & 0X3FFFFFFFFFFFFFF)->getStringReverse() << endl << "Orientation: " << (readID >> 62) << endl;
 
 	CLOCKSTOP;
 	return true;
@@ -176,7 +175,7 @@ bool HashTable::insertIntoTable(const Read *read, const string & subString, cons
 	{
 		bool ifEmpty=false;
 		UINT64 data = 0;
-		omp_set_lock(&(lock[index]));
+		omp_set_lock(&(lock[index%1000000]));
 		if(hashTable->at(index)==NULL)
 		{
 			vector<UINT64> * newList = new vector<UINT64>(1);				// Add the string in the new list.
@@ -191,7 +190,7 @@ bool HashTable::insertIntoTable(const Read *read, const string & subString, cons
 		{
 			data = hashTable->at(index)->at(0);
 		}
-		omp_unset_lock(&(lock[index]));
+		omp_unset_lock(&(lock[index%1000000]));
 		if(ifEmpty)
 			break;
 		// CP: explain these two bit operations
@@ -208,20 +207,17 @@ bool HashTable::insertIntoTable(const Read *read, const string & subString, cons
 		string subStr = (orient == 0 || orient == 2) ? str.substr(0,hashStringLength) : str.substr(str.length() - hashStringLength, hashStringLength);
 		if(subStr == subString)
 		{
-			omp_set_lock(&(lock[index]));
+			omp_set_lock(&(lock[index%1000000]));
 			hashTable->at(index)->push_back(ID);							// Add the string in the existing list.
-			omp_unset_lock(&(lock[index]));
+			hashTable->at(index)->shrink_to_fit();
+			omp_unset_lock(&(lock[index%1000000]));
 			break;
 		}
-		numberOfHashCollision++;
+		#pragma omp atomic
+			numberOfHashCollision++;
 		currentCollision++;
 		index = (index == getHashTableSize() - 1) ? 0: index + 1; 	// Increment the index
 	}
-
-	/*if(currentCollision > 1000)
-	{
-		cout << currentCollision << " collisions for read " << read->getReadNumber() << " " << subString << " " << orientation << endl;
-	}*/
 	return true;
 }
 

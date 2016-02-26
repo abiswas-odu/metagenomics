@@ -18,7 +18,6 @@ Read::Read(void)
 	// Initialize the variables.
 	readNumber = 0;
 	readName="";
-	isContainedRead = false;
 	superReadID = 0;
 	read = new dna_bitset();
 }
@@ -29,11 +28,9 @@ Read::Read(void)
 Read::Read(const string & s)
 {
 	// Initialize the variables.
-	read = new dna_bitset(s.c_str(), s.length());
-	setFrequency(1);
+	read = new dna_bitset(s, s.length());
 	readNumber = 0;
 	readName="";
-	isContainedRead = false;
 	superReadID = 0;
 }
 
@@ -51,9 +48,7 @@ Read::~Read(void)
 **********************************************************************************************************************/
 bool Read::setRead(const string & s)
 {
-	// Ted: if(s.length() < 10) MYEXIT("Length of string less than 10.");	// Reads must be at least 10 bases in length.  --> not need anymore
-	setFrequency(1);									// Set the frequency to 1.
-	dna_bitset *tmpRead = new dna_bitset(s.c_str(), s.length());
+	dna_bitset *tmpRead = new dna_bitset(s, s.length());
 	delete read;
 	read=NULL;
 	read = tmpRead;
@@ -75,16 +70,6 @@ bool Read::setReadNumber(UINT64 id)
 bool Read::setReadName(string name)
 {
 	readName = name;
-	return true;
-}
-
-
-/**********************************************************************************************************************
-	This function sets the frequency of the read.
-**********************************************************************************************************************/
-bool Read::setFrequency(UINT32 freq)
-{
-	if(freq < 1) MYEXIT("Frequency less than 1.");
 	return true;
 }
 

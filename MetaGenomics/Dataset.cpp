@@ -65,11 +65,7 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 	for(UINT64 i = 0 ; i < reads->size(); i++) 		// Assing ID's to the reads.
 		reads->at(i)->setReadNumber(i + 1);
 	numberOfUniqueReads=reads->size();
-	reads->resize(reads->size());
-
-	//sortReads();
-	//removeDupicateReads();								// Remove duplicated reads for the dataset.
-
+	reads->shrink_to_fit();
 }
 
 
@@ -188,14 +184,6 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 	return true;
 }
 
-
-// Ted: multi-thread this sort later
-void Dataset::sortReads(void)
-{
-	CLOCKSTART;
-	sort(reads->begin(),reads->end(), compareReads);	// Sort the reads lexicographically.
-	CLOCKSTOP;
-}
 
 /**********************************************************************************************************************
 	This function returns the number of reads

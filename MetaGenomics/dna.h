@@ -7,9 +7,10 @@
 #include "Common.h"
 
 
-#define BASE_MASK 0x3	/* binary: 11 */
+#define BASE_MASK 0x00000003	/* binary: 11 */
 
-#define HALF_FRAG_SIZE 4	/* Half of the number of bits used as the bit storage block. Here it is 32 so it is set to 16.*/
+#define FRAG_SIZE 32
+#define HALF_FRAG_SIZE 16	/* Half of the number of bits used as the bit storage block. Here it is 8 so it is set to 4.*/
 
 /* useful constants */
 enum
@@ -23,7 +24,7 @@ enum
 class dna_bitset
 {
 private:
-	uint8_t* m_data;
+	uint32_t* m_data;
 	size_t   m_len;
 public:
 
@@ -50,16 +51,16 @@ public:
 	 * @param dna_str a string containing a DNA sequence (e.g. "ATGCA...")
 	 * @param dna_len length of the DNA sequence
 	 */
-	dna_bitset (const char* dna_str, const size_t dna_len)
+	dna_bitset (const string & dna_str, const size_t dna_len)
 	{
 		m_len = dna_len;
 
 		/* number of bytes necessary to store dna_str as a bitset */
-		size_t dna_bytes = (dna_len / HALF_FRAG_SIZE) + (dna_len % HALF_FRAG_SIZE != 0);
+		size_t dna_word = (dna_len / HALF_FRAG_SIZE) + (dna_len % HALF_FRAG_SIZE != 0);
 
-		m_data = new uint8_t[dna_bytes];
+		m_data = new uint32_t[dna_word];
 
-		std::memset(m_data, 0, dna_bytes);
+		std::memset(m_data, 0, dna_word*(FRAG_SIZE/8));
 
 		/* for each base of the DNA sequence */
 		for (size_t i = 0; i < dna_len; i++)
@@ -105,7 +106,7 @@ public:
 			uint8_t shift = (HALF_FRAG_SIZE*2-2) - 2*(i % HALF_FRAG_SIZE);
 
 			/* get the i-th DNA base */
-			uint8_t base = (m_data[i/HALF_FRAG_SIZE] & (BASE_MASK << shift)) >> shift;
+			uint32_t base = (m_data[i/HALF_FRAG_SIZE] & (BASE_MASK << shift)) >> shift;
 			dna_str += strRevCArr[base];
 		}
 		return dna_str;
@@ -122,7 +123,7 @@ public:
 		{
 			uint8_t shift = (HALF_FRAG_SIZE*2-2) - 2*(i % HALF_FRAG_SIZE);
 			/* get the i-th DNA base */
-			uint8_t base = (m_data[i/HALF_FRAG_SIZE] & (BASE_MASK << shift)) >> shift;
+			uint32_t base = (m_data[i/HALF_FRAG_SIZE] & (BASE_MASK << shift)) >> shift;
 			dna_str += strArr[base];
 		}
 		return dna_str;
