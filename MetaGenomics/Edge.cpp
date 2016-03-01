@@ -22,16 +22,6 @@ Edge::Edge(void)
 	flow = 0;
 	coverageDepth = 0;
 	edgeID = 0;
-/*
-	listOfReads = new vector<UINT64>;
-	listOfReads->resize(listOfReads->size());						// Resize to reduce space.
-
-	listOfOverlapLengths = new vector<UINT16>;
-	listOfOverlapLengths->resize(listOfOverlapLengths->size());		// Resize to reduce space.
-
-	listOfOrientations = new vector<UINT8>;
-	listOfOrientations->resize(listOfOrientations->size());			// Resize to reduce space.
-*/
 }
 
 
