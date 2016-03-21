@@ -263,10 +263,10 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 
 	ofstream filePointer;
 	UINT64 nonContainedReads = 0;
-	string containedReadFile = fnamePrefix+"_cointainedReads.txt";
+	string containedReadFile = fnamePrefix+"_containedReads.txt";
 	filePointer.open(containedReadFile.c_str());
 	if(filePointer == NULL)
-		MYEXIT("Unable to open file: +"+fnamePrefix+"_cointainedReads.txt");
+		MYEXIT("Unable to open file: +"+fnamePrefix+"_containedReads.txt");
 
 	#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
 	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
@@ -286,7 +286,8 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 				for(UINT64 k = 0; k < listOfReads->size(); k++) // For each read in the list.
 				{
 					UINT64 data = listOfReads->at(k); // We used bit operation in the hash table to store read ID and orientation
-					Read *read2 = dataSet->getReadFromID(data & 0X3FFFFFFFFFFFFFFF); 	// Least significant 62 bits store the read number.
+					UINT64 read2ID = data & 0X3FFFFFFFFFFFFFFF;
+					Read *read2 = dataSet->getReadFromID(read2ID); 	// Least significant 62 bits store the read number.
 																						// Most significant 2 bits store the orientation.
 																						// Orientation 0 means prefix of forward of the read
 																						// Orientation 1 means suffix of forward of the read
@@ -315,7 +316,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 								else if(readString.length() > dataSet->getReadFromID(read2->superReadID)->getReadLength()) // This super read is longer than the previous super read. Update the super read ID.
 										read2->superReadID = i;
 								//Write contained read information regardless as it is a super read has been identified
-								filePointer<<read2->getReadName()<<"\t"<<read1->getReadName()<<"\t"<<orientation<<","
+								filePointer<<read2->getFileIndex()<<"\t"<<read1->getFileIndex()<<"\t"<<orientation<<","
 										<<overlapLen<<","
 										<<"0"<<","<<"0"<<","								//No substitutions or edits
 										<<read2->getReadLength()<<","					//Cointained Read (len,start,stop)
@@ -347,7 +348,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 									read2->superReadID = i;
 
 								//Write duplicate read information regardless as it is a super read has been identified
-								filePointer<<read2->getReadName()<<"\t"<<read1->getReadName()<<"\t"<<orientation<<","
+								filePointer<<read2->getFileIndex()<<"\t"<<read1->getFileIndex()<<"\t"<<orientation<<","
 										<<overlapLen<<","
 										<<"0"<<","<<"0"<<","								//No substitutions or edits
 										<<read2->getReadLength()<<","					//Duplicate Read (len,start,stop)
@@ -732,7 +733,6 @@ bool OverlapGraph::saveParGraphToFile(string fileName, map<UINT64,nodeType> * ex
 	if(filePointer == NULL)
 		MYEXIT("Unable to open file: "+fileName);
 
-	vector<UINT64> *list = new vector<UINT64>;
 	for (map<UINT64, vector<Edge*> * >::iterator it=parGraph->begin(); it!=parGraph->end();)
 	{
 		UINT64 readID = it->first;
@@ -742,55 +742,71 @@ bool OverlapGraph::saveParGraphToFile(string fileName, map<UINT64,nodeType> * ex
 			{
 				for(UINT64 j = 0; j < it->second->size(); j++)	// for each edge of the node
 				{
+					vector<UINT64> list;
 					Edge * e = it->second->at(j);
 					Edge *twinEdge = it->second->at(j)->getReverseEdge();
 					UINT64 source = e->getSourceRead()->getReadNumber();
 					UINT64 destination = e->getDestinationRead()->getReadNumber();
 					if(source < destination || (source == destination && e < e->getReverseEdge()))
 					{
-						list->push_back(source);	// store the edge information first
-						list->push_back(destination);
-						list->push_back(e->getOrientation());
-						list->push_back(e->getSourceRead()->getReadLength() - e->getOverlapOffset());  //overlap length
-						list->push_back(0);					//no substitutions
-						list->push_back(0);					//no edits
+						list.push_back(e->getSourceRead()->getFileIndex());	// store the edge information first
+						list.push_back(e->getDestinationRead()->getFileIndex());
+						list.push_back(e->getOrientation());
+						list.push_back(e->getSourceRead()->getReadLength() - e->getOverlapOffset());  //overlap length
+						list.push_back(0);					//no substitutions
+						list.push_back(0);					//no edits
 						//Source Read (len,start,stop)
-						list->push_back(e->getSourceRead()->getReadLength());
-						list->push_back(e->getOverlapOffset());
-						list->push_back(e->getSourceRead()->getReadLength()-1);
+						list.push_back(e->getSourceRead()->getReadLength());
+						list.push_back(e->getOverlapOffset());
+						list.push_back(e->getSourceRead()->getReadLength()-1);
 						//Destination Read (len,start,stop)
-						list->push_back(e->getDestinationRead()->getReadLength());
-						list->push_back(0);
-						list->push_back(e->getSourceRead()->getReadLength() - e->getOverlapOffset()-1);
-						list->push_back(0);
+						list.push_back(e->getDestinationRead()->getReadLength());
+						list.push_back(0);
+						list.push_back(e->getSourceRead()->getReadLength() - e->getOverlapOffset()-1);
+
+						//Check if destination is also marked by this thread.
+						// 0: Only source is marked
+						// 1: Only destination is marked
+						// 2: Both source and destination are marked
+						if(exploredReads->at(destination) == EXPLORED_AND_TRANSITIVE_EDGES_REMOVED)
+							list.push_back(2);
+						else
+							list.push_back(0);
 					}
 					else
 					{
-						list->push_back(destination);	// store the edge information first
-						list->push_back(source);
-						list->push_back(twinEdge->getOrientation());
-						list->push_back(twinEdge->getSourceRead()->getReadLength() - twinEdge->getOverlapOffset());  //overlap length
-						list->push_back(0);					//no substitutions
-						list->push_back(0);					//no edits
+						list.push_back(e->getDestinationRead()->getFileIndex());	// store the edge information first
+						list.push_back(e->getSourceRead()->getFileIndex());
+						list.push_back(twinEdge->getOrientation());
+						list.push_back(twinEdge->getSourceRead()->getReadLength() - twinEdge->getOverlapOffset());  //overlap length
+						list.push_back(0);					//no substitutions
+						list.push_back(0);					//no edits
 						//Source Read (len,start,stop)
-						list->push_back(twinEdge->getSourceRead()->getReadLength());
-						list->push_back(twinEdge->getOverlapOffset());
-						list->push_back(twinEdge->getSourceRead()->getReadLength()-1);
+						list.push_back(twinEdge->getSourceRead()->getReadLength());
+						list.push_back(twinEdge->getOverlapOffset());
+						list.push_back(twinEdge->getSourceRead()->getReadLength()-1);
 						//Destination Read (len,start,stop)
-						list->push_back(twinEdge->getDestinationRead()->getReadLength());
-						list->push_back(0);
-						list->push_back(twinEdge->getSourceRead()->getReadLength() - twinEdge->getOverlapOffset()-1);
-						list->push_back(1);
+						list.push_back(twinEdge->getDestinationRead()->getReadLength());
+						list.push_back(0);
+						list.push_back(twinEdge->getSourceRead()->getReadLength() - twinEdge->getOverlapOffset()-1);
+						//Check if destination is also marked by this thread.
+						// 0: Only source is marked
+						// 1: Only destination is marked
+						// 2: Both source and destination are marked
+						if(exploredReads->at(destination) == EXPLORED_AND_TRANSITIVE_EDGES_REMOVED)
+							list.push_back(2);
+						else
+							list.push_back(1);
 					}
-					if(list->size()>0)
+					//write to file
+					if(list.size()>0)
 					{
-						filePointer<<dataSet->getReadFromID(list->at(0))->getReadName()<<"\t";
-						filePointer<<dataSet->getReadFromID(list->at(1))->getReadName()<<"\t";
-						for(UINT64 i = 2; i < list->size(); i++)	// store in a file for future use.
-							filePointer<<list->at(i)<<",";
-						filePointer<<"NA"<<endl;
+						filePointer<<list.at(0)<<"\t";
+						filePointer<<list.at(1)<<"\t";
+						for(UINT64 i = 2; i < list.size()-1; i++)	// store in a file for future use.
+							filePointer<<list.at(i)<<",";
+						filePointer<<"NA,"<<list.at(list.size()-1)<<endl;
 					}
-					list->clear();
 					//remove twin edges
 					UINT64 twinID = twinEdge->getSourceRead()->getReadNumber();
 					for(UINT64 index1 = 0; index1 < parGraph->at(twinID)->size(); index1++) 	// Get the reverse edge first
@@ -813,7 +829,6 @@ bool OverlapGraph::saveParGraphToFile(string fileName, map<UINT64,nodeType> * ex
 				delete parGraph->at(readID);
 				parGraph->erase(it++);
 				exploredReads->at(readID) = EXPLORED_AND_TRANSITIVE_EDGES_WRITTEN;
-
 			}
 			else
 				++it;
@@ -822,7 +837,6 @@ bool OverlapGraph::saveParGraphToFile(string fileName, map<UINT64,nodeType> * ex
 			++it;
 	}
 	filePointer.close();
-	delete list;
 	CLOCKSTOP;
 	return true;
 }

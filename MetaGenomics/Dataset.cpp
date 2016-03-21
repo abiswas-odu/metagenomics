@@ -17,7 +17,6 @@ bool compareReads (Read *read1, Read *read2)
 {
 	return read1->getStringForward() < read2->getStringForward();
 }
-
 /**********************************************************************************************************************
 	Default constructor
 **********************************************************************************************************************/
@@ -37,7 +36,7 @@ Dataset::Dataset(void)
 /**********************************************************************************************************************
 	Another constructor
 **********************************************************************************************************************/
-Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFileNames, UINT64 minOverlap)
+Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFileNames, string fileNamePrefix, UINT64 minOverlap)
 {
 	// Initialize the variables.
 	numberOfUniqueReads = 0;
@@ -48,17 +47,35 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 	pairedEndDatasetFileNames = pairedEndFileNames;
 	singleEndDatasetFileNames = singleEndFileNames;
 	minimumOverlapLength = minOverlap;
-	UINT64 counter = 0;
+	UINT64 counter = 0, fileIndex=0;
+
+	ofstream filePointer;
+	string fileName = fileNamePrefix+"_ReadIDMap.txt";
+	filePointer.open(fileName.c_str());
+	if(filePointer == NULL)
+		MYEXIT("Unable to open file: " + fileName);
 
 	for(UINT64 i = 0; i < pairedEndDatasetFileNames.size(); i++)						// Read the paired-end datasets.
 	{
-		readDataset(pairedEndDatasetFileNames.at(i), minimumOverlapLength, counter++);
+		UINT64 startReadID=numberOfReads;
+		readDataset(pairedEndDatasetFileNames.at(i), minimumOverlapLength, counter++, fileIndex);
+		if(numberOfReads <= startReadID)
+			MYEXIT("File empty. No reads loaded from "+ pairedEndDatasetFileNames.at(i));
+		filePointer<<pairedEndDatasetFileNames.at(i)<<": Paired-end file "<<i+1<<"\nReadID Range: ("<<startReadID+1<<",";
+		filePointer<<numberOfReads<<")\n";
 	}
 
 	for(UINT64 i = 0; i < singleEndDatasetFileNames.size(); i++)						// Read the single-end datasets.
 	{
-		readDataset(singleEndDatasetFileNames.at(i), minimumOverlapLength, counter++);
+		UINT64 startReadID=numberOfReads;
+		readDataset(singleEndDatasetFileNames.at(i), minimumOverlapLength, counter++, fileIndex);
+
+		if(numberOfReads <= startReadID)
+			MYEXIT("File empty. No reads loaded from "+ singleEndDatasetFileNames.at(i));
+		filePointer<<singleEndDatasetFileNames.at(i)<<": Singleton file "<<i+1<<"\nReadID Range: ("<<startReadID+1<<",";
+		filePointer<<numberOfReads<<")\n";
 	}
+	filePointer.close();
 	cout << endl << "Shortest read length in all datasets: " << setw(5) << shortestReadLength<<endl;
 	cout << " Longest read length in all datasets: " << setw(5) << longestReadLength <<endl;
 
@@ -96,7 +113,7 @@ void Dataset::saveReads(string fileName)
 /**********************************************************************************************************************
 	This function reads the dataset from FASTA/FASTQ files
 **********************************************************************************************************************/
-bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumber)
+bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumber, UINT64 &fIndx)
 {
 	CLOCKSTART;
 	cout << "Reading dataset: " << datasetNumber << " from file: " << fileName << endl;
@@ -106,28 +123,26 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 		MYEXIT("Unable to open file: "+fileName)
 	UINT64 goodReads = 0, badReads = 0;
 	vector<string> line;
-	string line1,line0, text, line1ReverseComplement,line2ReverseComplement;
+	string text;
 	enum FileType { FASTA, FASTQ, UNDEFINED};
 	FileType fileType = UNDEFINED;
-	while(!myFile.eof())
+	while(getline(myFile,text))
 	{
+		string line1="",line0="";
 		if( (goodReads + badReads ) != 0 && (goodReads + badReads)%1000000 == 0)
 			cout<< setw(10) << goodReads + badReads << " reads processed in dataset " << setw(2) << datasetNumber <<". " << setw(10) << goodReads << " good reads." << setw(10) << badReads << " bad reads." << endl;
 		if(fileType == UNDEFINED)
 		{
-			getline (myFile,text);
 			if(text[0] == '>')
 				fileType = FASTA;
 			else if(text[0] == '@')
 				fileType = FASTQ;
 			else
 				MYEXIT("Unknown input file format.");
-			myFile.seekg(0, ios::beg);
 		}
 		line.clear();
 		if(fileType == FASTA) 			// Fasta file
 		{
-			getline (myFile,text);
 			line.push_back(text);
 			getline (myFile,text,'>');
 			line.push_back(text);
@@ -140,7 +155,8 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 		}
 		else if(fileType == FASTQ) 					// Fastq file.
 		{
-			for(UINT64 i = 0; i < 4; i++) 	// Read the remaining 3 lines. Total of 4 lines represent one sequence in a fastq file.
+			line.push_back(text);
+			for(UINT64 i = 0; i < 3; i++) 	// Read the remaining 3 lines. Total of 4 lines represent one sequence in a fastq file.
 			{
 				getline (myFile,text);
 				line.push_back(text);
@@ -149,17 +165,13 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 			line0=line.at(0);
 			line1 = line.at(1); 			// The first string is in the 2nd line.
 		}
+		fIndx++;							//Increment file index of the read
 		for (std::string::iterator p = line1.begin(); line1.end() != p; ++p) // Change the case
 		    *p = toupper(*p);
 		if(line1.length() > minOverlap && testRead(line1) ) // Test the read is of good quality.
 		{
-
-			line1ReverseComplement = reverseComplement(line1);
-			if(line1.compare(line1ReverseComplement) < 0) // Store lexicographically smaller between the read and its reverse complement.
-				line1ReverseComplement= line1;
-			Read *r1=new Read(line1ReverseComplement);
+			Read *r1=new Read(line1, fIndx);
 			UINT64 len = r1->getReadLength();
-			r1->setReadName(line0);
 			if(len > longestReadLength)
 				longestReadLength = len;
 			if(len < shortestReadLength)
@@ -221,51 +233,6 @@ bool Dataset::testRead(const string & read)
 		return false;	// If 80% bases are the same base.
 	return true;
 }
-
-
-
-
-/**********************************************************************************************************************
-	Search a read in the dataset using binary search
-**********************************************************************************************************************/
-Read * Dataset::getReadFromString(const string & read)
-{
-	UINT64 min = 0, max = getNumberOfUniqueReads()-1;
-	string readReverse = reverseComplement(read);
-	int comparator;
-	if(read.compare(readReverse) < 0)
-	{
-		while (max >= min) 															// At first search for the forward string.
-		{
-			UINT64 mid = (min + max) / 2; 	// Determine which subarray to search.
-			comparator = reads->at(mid)->getStringForward().compare(read.c_str());
-			if(comparator == 0)
-				return reads->at(mid);
-			else if (comparator < 0) 	// Change min index to search upper subarray.
-				min = mid + 1;
-			else if (comparator > 0) 	// Change max index to search lower subarray.
-				max = mid - 1;
-		}
-	}
-	else
-	{
-		while (max >= min) 																	// If forward string is not found then search for the reverse string
-		{
-			UINT64 mid = (min+max) / 2; 													// Determine which subarray to search
-			comparator = reads->at(mid)->getStringForward().compare(readReverse.c_str());
-			if( comparator == 0)
-				return reads->at(mid);
-			else if (comparator < 0) 	// Change min index to search upper subarray.
-				min = mid + 1;
-			else if (comparator > 0) 	// Change max index to search lower subarray.
-				max = mid - 1;
-		}
-	}
-	MYEXIT("String not found in Dataset: "+read);
-}
-
-
-
 
 /**********************************************************************************************************************
 	Returns the reverse complement of a read

@@ -30,7 +30,7 @@ int main(int argc, char **argv)
 	UINT64 maxThreads = DEF_THREAD_COUNT;
 	UINT64 writeGraphSize = MAX_PAR_GRAPH_SIZE;
 	parseArguments(argc, argv, pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength, startFromUnitigGraph, maxThreads, writeGraphSize);
-	Dataset *dataSet = new Dataset(pairedEndFileNames, singleEndFileNames, minimumOverlapLength);
+	Dataset *dataSet = new Dataset(pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength);
 	OverlapGraph *overlapGraph;
 	HashTable *hashTable=new HashTable();
 	hashTable->insertDataset(dataSet, minimumOverlapLength,maxThreads);

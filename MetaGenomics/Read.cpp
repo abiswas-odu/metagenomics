@@ -17,21 +17,21 @@ Read::Read(void)
 {
 	// Initialize the variables.
 	readNumber = 0;
-	readName="";
 	superReadID = 0;
 	read = new dna_bitset();
+	fileIndex=0;
 }
 
 /**********************************************************************************************************************
 	Another constructor
 **********************************************************************************************************************/
-Read::Read(const string & s)
+Read::Read(const string & s, UINT64 fIndx)
 {
 	// Initialize the variables.
 	read = new dna_bitset(s, s.length());
 	readNumber = 0;
-	readName="";
 	superReadID = 0;
+	fileIndex=fIndx;
 }
 
 /**********************************************************************************************************************
@@ -63,16 +63,14 @@ bool Read::setReadNumber(UINT64 id)
 	readNumber = id;												// Set the read number.
 	return true;
 }
-
 /**********************************************************************************************************************
-	This function assigns an Name to the read.
+	This function assigns an ID to the read.
 **********************************************************************************************************************/
-bool Read::setReadName(string name)
+void Read::setFileIndex(UINT64 id)
 {
-	readName = name;
-	return true;
+	if(id <= 0) MYEXIT("ID less than 1.");
+	fileIndex = id;												// Set the read number.
 }
-
 /**********************************************************************************************************************
 	Returns the reverse complement of a read.
 **********************************************************************************************************************/
