@@ -57,63 +57,59 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parall
 	setHashTableSize(size);
 	UINT64 noOfReads=d->getNumberOfUniqueReads();
 
+	#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
+	for(UINT64 i = 1; i <= noOfReads; i++)		// For each read in the dataset
+		hashRead(d->getReadFromID(i)); 								// Calculate the offset lengths of each hash table key in the hash table.
 
-	omp_lock_t *lock = new omp_lock_t[1000000];
-	#pragma omp parallel for
-	for (UINT64 i=0; i<1000000; i++)
-		omp_init_lock(&(lock[i]));
-
+	//Change lengths to offsets...
+	UINT64 nextOffset=hashTable[0];
+	hashTable[0]=0;
+	for(size_t i=1; i<hashTableSize; i++)
+	{
+		UINT64 tempOffset=nextOffset+hashTable[i-1];
+		nextOffset=hashTable[i];
+		hashTable[i]=tempOffset;
+	}
+	size_t totalDataSize = nextOffset + hashTable[hashTableSize-1];
+	setHashTableDataSize(totalDataSize);
+	UINT64 *hashDataLengths = new UINT64[hashTableSize];
+	std::memset(hashDataLengths, 0, hashTableSize*sizeof(UINT64));
 
 	#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
 	for(UINT64 i = 1; i <= noOfReads; i++)		// For each read in the dataset
 	{
-		hashRead(d->getReadFromID(i), lock); 								// Insert the read in the hash table.
-		if(i%1000000 == 0)
-			cout << setw(10) << i << " reads inserted in the hash table. Hash collisions: " << setw(10) << numberOfHashCollision << endl;	// Print some statistics.
+		insertIntoTable(d->getReadFromID(i),hashDataLengths);
 	}
-	delete lock;
-	cout << endl << "Total Hash collisions: " << numberOfHashCollision << endl;
-	UINT64 longestSize = 0, readID=1;
-	for(UINT64 i = 0 ; i < this->hashTableSize; i++)
-	{
-		if(hashTable->at(i)!=NULL && hashTable->at(i)->size() > longestSize)	// Longest list in the hash table.
-		{
-			longestSize = hashTable->at(i)->size();
-			readID = hashTable->at(i)->at(0);
-		}
-	}
-	cout <<"Longest list size in the hash table is: " << longestSize << endl << "Read: " << endl << this->dataSet->getReadFromID(readID & 0X3FFFFFFFFFFFFFF)->getStringForward() << endl << this->dataSet->getReadFromID(readID & 0X3FFFFFFFFFFFFFF)->getStringReverse() << endl << "Orientation: " << (readID >> 62) << endl;
-
+	delete hashDataLengths;
 	CLOCKSTOP;
 	return true;
 }
 
 
 
-
 /**********************************************************************************************************************
 	Insert a read in the hashTable
 **********************************************************************************************************************/
-bool HashTable::hashRead(const Read *read, omp_lock_t *lock)
+bool HashTable::hashRead(const Read *read)
 {
 	string forwardRead = read->getStringForward();
-	string reverseRead = read->getStringReverse();
 
 	string prefixForward = forwardRead.substr(0,hashStringLength); 											// Prefix of the forward string.
 	string suffixForward = forwardRead.substr(forwardRead.length() - hashStringLength,hashStringLength);	// Suffix of the forward string.
-	string prefixReverse = reverseRead.substr(0,hashStringLength);											// Prefix of the reverse string.
-	string suffixReverse = reverseRead.substr(reverseRead.length() - hashStringLength,hashStringLength);	// Suffix of the reverse string.
 
-	insertIntoTable(read, prefixForward, 0, lock); // Insert the prefix of the forward string in the hash table.
-	insertIntoTable(read, suffixForward, 1, lock); // Insert the suffix of the forward string in the hash table.
-	insertIntoTable(read, prefixReverse, 2, lock); // Insert the prefix of the reverse string in the hash table.
-	insertIntoTable(read, suffixReverse, 3, lock); // Insert the suffix of the reverse string in the hash table.
+	/* number of bytes necessary to store dna_str as a bitset */
+	size_t dna_word = (forwardRead.length() / 32) + (forwardRead.length() % 32 != 0);
+
+	UINT64 index = getHashIndex(prefixForward);						// Get the index using the hash function.
+	#pragma omp atomic
+		hashTable[index]+=(dna_word+1);
+
+	index = getHashIndex(suffixForward);
+	#pragma omp atomic
+		hashTable[index]+=(dna_word+1);
+
 	return true;
 }
-
-
-
-
 
 /**********************************************************************************************************************
 	Set the hashTableSize
@@ -122,12 +118,33 @@ void HashTable::setHashTableSize(UINT64 size)
 {
 	cout << "Hash Table size set to: " << size << endl;
 	hashTableSize=size;
-    // Ted: hashTable name should be changed. This can be called in the constructor.
-	hashTable = new vector < vector<UINT64> *>(hashTableSize);
+    hashTable = new UINT64[hashTableSize];
+	std::memset(hashTable, 0, hashTableSize*sizeof(UINT64));
 }
 
+/**********************************************************************************************************************
+	Set the Hash Data Size
+**********************************************************************************************************************/
+void HashTable::setHashTableDataSize(UINT64 size)
+{
+	cout << "Hash Data size set to: " << size << endl;
+	hashDataTableSize=size;
+	hashData = new UINT64[hashDataTableSize];
+	std::memset(hashData, 0, hashDataTableSize*sizeof(UINT64));
+}
 
-
+/**********************************************************************************************************************
+	Returns the hash value of a subString
+**********************************************************************************************************************/
+UINT64 HashTable::getHashIndex(const string & subString) const
+{
+	UINT64 hashIndxFwd = hashFunction(subString);
+	UINT64 hashIndxRev =  hashFunction(reverseComplement(subString));
+	if(hashIndxFwd<=hashIndxRev)
+		return hashIndxFwd;
+	else
+		return hashIndxRev;
+}
 
 /**********************************************************************************************************************
 	Returns the hash value of a subString
@@ -159,65 +176,90 @@ UINT64 HashTable::hashFunction(const string & subString) const
 /**********************************************************************************************************************
 	Insert a subString in a hashTable
 **********************************************************************************************************************/
-bool HashTable::insertIntoTable(const Read *read, const string & subString, const UINT64 & orientation, omp_lock_t *lock)
+bool HashTable::insertIntoTable(const Read *read, UINT64 *hashDataLengths)
 {
-	UINT64 ID = read->getReadNumber() | (orientation << 62); 	// Most significant two bits are used to store the orientation of the string in the read.
-																// 00 = 0 means prefix of the forward string.
-																// 01 = 1 means suffix of the forward string.
-																// 10 = 2 means prefix of the reverse string.
-																// 11 = 3 means suffix of the reverse string.
-																// Read number is stored is least significant 62 bits.
-	UINT64 currentCollision =0;
+	string forwardRead = read->getStringForward();
 
-	UINT64 index = hashFunction(subString);						// Get the index using the hash function.
+	string prefixForward = forwardRead.substr(0,hashStringLength); 											// Prefix of the forward string.
+	string suffixForward = forwardRead.substr(forwardRead.length() - hashStringLength,hashStringLength);	// Suffix of the forward string.
 
-	while(1)
+	/* number of 64 bit words necessary to store dna_str as a bitset */
+	UINT64 dna_word = (forwardRead.length() / 32) + (forwardRead.length() % 32 != 0);
+	UINT64 orient=0;
+
+	UINT64 prefixForwardID =  read->getReadNumber() | (forwardRead.length() << 48); 	// Most significant bit is used to store the orientation of the string in the read.
+																							// 0 = 0 means prefix of the forward string.
+																							// 1 = 1 means suffix of the forward string.
+																							//Read string length is stored is next 15 most significant bits.
+																							//Read ID is stored in the 48 least significant bits.
+	orient=1;
+	UINT64 suffixForwardID =  read->getReadNumber() | (forwardRead.length() << 48) | (orient << 63);
+																	// Most significant bit is used to store the orientation of the string in the read.
+																	// 0 = 0 means prefix of the forward string.
+																	// 1 = 1 means suffix of the forward string.
+																	//Read string length is stored is next 15 most significant bits.
+																	//Read ID is stored in the 48 least significant bits.
+
+	/*store prefix forward data*/
+	UINT64 index = getHashIndex(prefixForward);						// Get the index using the hash function.
+	UINT64 baseOffset = hashTable[index];							// Get the start offset of the hash value in the hashData table
+	UINT64 currentOffset = hashDataLengths[index];					// Get the current offset of the hash value in the hashData table
+	hashData[baseOffset+currentOffset] = prefixForwardID;
+	/* for each base of the DNA sequence */
+	for (size_t i = 0; i < forwardRead.length(); i++)
 	{
-		bool ifEmpty=false;
-		UINT64 data = 0;
-		omp_set_lock(&(lock[index%1000000]));
-		if(hashTable->at(index)==NULL)
+		UINT64 shift = (32*2-2) - 2*(i % 32);
+
+		switch (forwardRead[i])
 		{
-			vector<UINT64> * newList = new vector<UINT64>(1);				// Add the string in the new list.
-			newList->at(0)=ID;
-			#pragma omp critical
-			{
-				hashTable->at(index)=newList;
-			}
-			ifEmpty=true;
-		}
-		else
-		{
-			data = hashTable->at(index)->at(0);
-		}
-		omp_unset_lock(&(lock[index%1000000]));
-		if(ifEmpty)
+		case 'A':
+			hashData[baseOffset+currentOffset + 1 + i/32] |= (UINT64)BASE_A << shift;
 			break;
-		// CP: explain these two bit operations
-		// The least significant 62 bits are used to store the read ID
-		// Ted: readNumber =   00111111 11111111 11111111 11111111 11111111 11111111 11111111 11111111
-		//                   & data
-		//                 =   62 bits of the right most bit
-		UINT64 readNumber = data & 0X3FFFFFFFFFFFFFFF;
-		// The most significant 2 bits are used to store the orientation.
-		UINT64 orient = data >> 62;
-		// Orientation 0 or 1 means that we took the forward string of the read. Otherwise we took the reverse string of the read.
-		string str = (orient == 0 || orient == 1) ? dataSet->getReadFromID(readNumber)->getStringForward() : dataSet->getReadFromID(readNumber)->getStringReverse();
-		// Orientation 0 or 2 means that we took the prefix of the string. Otherwise we took the suffix of the read.
-		string subStr = (orient == 0 || orient == 2) ? str.substr(0,hashStringLength) : str.substr(str.length() - hashStringLength, hashStringLength);
-		if(subStr == subString)
-		{
-			omp_set_lock(&(lock[index%1000000]));
-			hashTable->at(index)->push_back(ID);							// Add the string in the existing list.
-			hashTable->at(index)->shrink_to_fit();
-			omp_unset_lock(&(lock[index%1000000]));
+		case 'C':
+			hashData[baseOffset+currentOffset + 1 + i/32] |= (UINT64)BASE_C << shift;
 			break;
+		case 'G':
+			hashData[baseOffset+currentOffset + 1 + i/32] |= (UINT64)BASE_G << shift;
+			break;
+		case 'T':
+			hashData[baseOffset+currentOffset + 1 + i/32] |= (UINT64)BASE_T << shift;
+			break;
+		default:
+			throw std::invalid_argument("invalid DNA base");
 		}
-		#pragma omp atomic
-			numberOfHashCollision++;
-		currentCollision++;
-		index = (index == getHashTableSize() - 1) ? 0: index + 1; 	// Increment the index
 	}
+	#pragma omp atomic
+		hashDataLengths[index] +=  dna_word + 1;
+
+	/*store prefix reverse data*/
+	index = getHashIndex(suffixForward);						// Get the index using the hash function.
+	baseOffset = hashTable[index];							// Get the start offset of the hash value in the hashData table
+	currentOffset = hashDataLengths[index];					// Get the current offset of the hash value in the hashData table
+	hashData[baseOffset+currentOffset] = suffixForwardID;
+	/* for each base of the DNA sequence */
+	for (size_t i = 0; i < forwardRead.length(); i++)
+	{
+		uint32_t shift = (32*2-2) - 2*(i % 32);
+		switch (forwardRead[i])
+		{
+		case 'A':
+			hashData[baseOffset+currentOffset + 1 + i/32] |= (UINT64)BASE_A << shift;
+			break;
+		case 'C':
+			hashData[baseOffset+currentOffset + 1 + i/32] |= (UINT64)BASE_C << shift;
+			break;
+		case 'G':
+			hashData[baseOffset+currentOffset + 1 + i/32] |= (UINT64)BASE_G << shift;
+			break;
+		case 'T':
+			hashData[baseOffset+currentOffset + 1 + i/32] |= (UINT64)BASE_T << shift;
+			break;
+		default:
+			throw std::invalid_argument("invalid DNA base");
+		}
+	}
+	#pragma omp atomic
+		hashDataLengths[index] += dna_word + 1;
 	return true;
 }
 
@@ -228,26 +270,72 @@ bool HashTable::insertIntoTable(const Read *read, const string & subString, cons
 **********************************************************************************************************************/
 vector<UINT64> * HashTable::getListOfReads(const string & subString) const
 {
-
-		UINT64 index = hashFunction(subString);	// Get the index using the hash function.
-
-		while(hashTable->at(index))
-		{
-
-			UINT64 data = hashTable->at(index)->at(0);
-			UINT64 readNumber = data & 0X3FFFFFFFFFFFFFFF;	// Read number is stored in least significant 62 bits.
-			UINT64 orient = data >> 62; 					// Orientation is stored in the most significant two bits.
-			string str = (orient == 0 || orient == 1) ? dataSet->getReadFromID(readNumber)->getStringForward() : dataSet->getReadFromID(readNumber)->getStringReverse();
-			string subStr = (orient == 0 || orient == 2) ? str.substr(0,hashStringLength) : str.substr(str.length() - hashStringLength,hashStringLength);
-			if(subStr == subString)	// subString present in the current index
-				break;
-			numberOfHashCollision++;
-			index = (index == getHashTableSize() - 1) ? 0: index + 1; // Increment the index.
+	vector<UINT64> * readHits = new vector<UINT64>;
+	UINT64 index = getHashIndex(subString);	// Get the index using the hash function.
+	UINT64 startOffset=hashTable[index];
+	UINT64 endOffset= (index==hashTableSize-1)?hashDataTableSize:hashTable[index+1];
+	while(startOffset<endOffset)
+	{
+		UINT64 readID = hashData[startOffset] & 0X0000FFFFFFFFFFFF;
+		UINT64 orient = hashData[startOffset] >> 63;
+		UINT64 stringLen = (hashData[startOffset] >> 48) & 0X0000000000007FFF;
+		UINT64 dataLen = (stringLen / 32) + (stringLen % 32 != 0);
+		if(orient==0){
+			string forwardRead = toString(startOffset+1,stringLen);
+			string prefixForward = forwardRead.substr(0,hashStringLength);
+			string suffixReverse = reverseComplement(prefixForward);
+			if(subString==prefixForward)
+			{
+				UINT64 orientation=0;
+				UINT64 data = readID | (orientation << 62);
+				readHits->push_back(data);
+			}
+			else if(subString==suffixReverse){
+				UINT64 orientation=3;
+				UINT64 data = readID | (orientation << 62);
+				readHits->push_back(data);
+			}
 		}
-		return hashTable->at(index);	// return the index.
+		else {
+			string forwardRead = toString(startOffset+1,stringLen);
+			string suffixForward = forwardRead.substr(forwardRead.length() - hashStringLength,hashStringLength);
+			string prefixReverse = reverseComplement(suffixForward);
+			if(subString==suffixForward)
+			{
+				UINT64 orientation=1;
+				UINT64 data = readID | (orientation << 62);
+				readHits->push_back(data);
+			}
+			else if(subString==prefixReverse){
+				UINT64 orientation=2;
+				UINT64 data = readID | (orientation << 62);
+				readHits->push_back(data);
+			}
+		}
+		startOffset+=dataLen+1;
+	}
+	return readHits;	// return the index.
 }
 
-
+/*
+ * ===  FUNCTION  ======================================================================
+ *         Name:  reverseComplement
+ *  Description:  Returns the reverse complement of a sequence.
+ * =====================================================================================
+ */
+string HashTable::reverseComplement(const std::string & seq) const
+{
+	uint64_t sLength = seq.length();
+	std::string reverse(sLength,'0');
+	for(uint64_t i = 0;i < sLength; i++)
+	{
+		if( seq[i] & 0X02 ) // C or G
+			reverse.at(sLength -  i - 1 ) = seq[i] ^ 0X04;
+		else // A <==> T
+			reverse.at(sLength -  i - 1 ) = seq[i] ^ 0X15;
+	}
+	return reverse; // return the reverse complement as a string
+}
 
 
 /**********************************************************************************************************************
@@ -256,9 +344,27 @@ vector<UINT64> * HashTable::getListOfReads(const string & subString) const
 HashTable::~HashTable(void)
 {
 	// Free the memory used by the hash table.
-	for(UINT64 index = 0; index < getHashTableSize(); index++)
-		delete hashTable->at(index);
 	delete hashTable;
+	delete hashData;
+}
+
+/*
+ * Convert a set of data bytes from hash data table to string
+ *
+ */
+string HashTable::toString(UINT64 hashDataIndex,UINT64 stringLen) const
+{
+	string dna_str="";
+	string strArr[] = {"A","C","G","T"};
+	/* for each base of the DNA sequence */
+	for (size_t i = 0; i < stringLen; i++)
+	{
+		uint8_t shift = (32*2-2) - 2*(i % 32);
+		/* get the i-th DNA base */
+		UINT64 base = (hashData[hashDataIndex + i/32] & ((UINT64)BASE_MASK << shift)) >> shift;
+		dna_str += strArr[base];
+	}
+	return dna_str;
 }
 
 

@@ -111,7 +111,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 
 	markContainedReads(fnamePrefix);
 
-	vector<UINT64> * allMarked = new vector<UINT64>;
+	vector<bool> * allMarked = new vector<bool>;
 	allMarked->reserve(dataSet->getNumberOfUniqueReads()+1);
 
 	for(UINT64 i = 0; i <= dataSet->getNumberOfUniqueReads(); i++) // Initialization
@@ -245,7 +245,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			}
 		}
 	}
-
+	delete allMarked;
 	delete hashTable;	// Do not need the hash table any more.
 	cout<<endl<<"Graph Construction Complete"<<endl;
 	CLOCKSTOP;
@@ -272,7 +272,6 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
 	{
 		Read *read1 = dataSet->getReadFromID(i); // Get the read
-		bool isCointained=false;
 		if(read1->superReadID!=0)		//If read is already marked as contained, there is no need to look for contained reads within it
 			continue;
 		string readString = read1->getStringForward(); // Get the forward of the read
@@ -299,7 +298,6 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 					{
 						if(readString.length() > read2->getReadLength())
 						{
-							isCointained=true;
 							UINT64 overlapLen=0;
 							UINT64 orientation=1;
 							switch (data >> 62) // Most significant 2 bit represents  00 - prefix forward, 01 - suffix forward, 10 -  prefix reverse, 11 -  suffix reverse.
@@ -330,7 +328,6 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 						}
 						else if(readString.length() == read2->getStringForward().length() && read1->getReadNumber() < read2->getReadNumber())
 						{
-							isCointained=true;
 							UINT64 overlapLen=0;
 							UINT64 orientation=1;
 							switch (data >> 62) // Most significant 2 bit represents  00 - prefix forward, 01 - suffix forward, 10 -  prefix reverse, 11 -  suffix reverse.
@@ -362,12 +359,17 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 						}
 					}
 				}
+				delete listOfReads;
 			}
 		}//End of inner for
-		if(!isCointained)
-			nonContainedReads++;
 	}
 	filePointer.close();
+	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
+	{
+		Read *read1 = dataSet->getReadFromID(i); // Get the read
+		if(read1->superReadID==0)		//If read is already marked as contained, there is no need to look for contained reads within it
+			nonContainedReads++;
+	}
 	cout<< endl << setw(10) << nonContainedReads << " Non-contained reads. (Keep as is)" << endl;
 	cout<< setw(10) << dataSet->getNumberOfUniqueReads()-nonContainedReads << " contained reads. (Need to change their mate-pair information)" << endl;
 	CLOCKSTOP;
@@ -608,6 +610,7 @@ bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> 
 					insertedEdgeList.push_back(read2ID);
 				}
 			}
+			delete listOfReads;
 		}
 	}
 	if(parGraph->at(readNumber)->size() != 0)

@@ -25,6 +25,7 @@ class Dataset
 		string reverseComplement(const string & read); 		// Get the reverse complement of a string.
 		bool testRead(const string & read); 				// Test if the read is good. Contains only {A,C,G,T} and does not contain more than 80% of same base.
 															// The dataset contains only good quality reads.
+
 	public:
 		vector<string> pairedEndDatasetFileNames;
 		vector<string> singleEndDatasetFileNames;
@@ -38,12 +39,7 @@ class Dataset
 		UINT64 getNumberOfReads(void); 						// Get the number of total reads in the database.
 		UINT64 getNumberOfUniqueReads(void); 				// Get the number of unique reads in the database.
 		bool printDataset(void); 							// Print few the reads in the dataset. For debuggin only.
-        // Ted: change it to constant pointer
-		Read * getReadFromString(const string & read); 		// Find a read in the database given the string. Uses binary search in the list of reads.
-		Read * getReadFromID(UINT64 ID); 					// Find a read in the database given the ID in constant time.
-		void readMatePairsFromFile(void);					// Read the matePairs from file
-		void saveReads(string fileName);					// Save all the sorted unique reads in a text file. Used for debugging.
-
+        Read * getReadFromID(UINT64 ID); 					// Find a read in the database given the ID in constant time.
 };
 
 

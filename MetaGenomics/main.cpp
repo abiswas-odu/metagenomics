@@ -14,10 +14,6 @@
 #include "Edge.h"
 #include "OverlapGraph.h"
 
-
-
-
-
 void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, vector<string> & singleEndFileNames,string & allFileName, UINT64 & minimumOverlapLength, bool & startFromUnitigGraph, UINT64 & maxThreads, UINT64 & writeGraphSize);
 
 int main(int argc, char **argv)
@@ -39,8 +35,6 @@ int main(int argc, char **argv)
 	delete overlapGraph;
 	CLOCKSTOP;
 }
-
-
 
 /**********************************************************************************************************************
 	Parse the input arguments

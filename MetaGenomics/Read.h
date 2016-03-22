@@ -42,7 +42,6 @@ class Read
 		UINT16 getReadLength(void) const {return read->getLength();} 								// Get the length of the string in the current read.
 		UINT64 getReadNumber(void) const {return readNumber;} 								// Get the read number of the current read.
 		UINT64 getFileIndex(void) const {return fileIndex;} 								// Get the fileIndex number of the current read.
-		bool addMatePair(Read *r, UINT8 orientation, UINT64 datasetNumber);				// Add a matepair in the list.
 };
 
 #endif /* READS_H_ */

@@ -9,14 +9,6 @@
 #include "Dataset.h"
 
 
-
-/**********************************************************************************************************************
-	Function to compare two reads. Used for sorting.
-**********************************************************************************************************************/
-bool compareReads (Read *read1, Read *read2)
-{
-	return read1->getStringForward() < read2->getStringForward();
-}
 /**********************************************************************************************************************
 	Default constructor
 **********************************************************************************************************************/
@@ -84,32 +76,6 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 	numberOfUniqueReads=reads->size();
 	reads->shrink_to_fit();
 }
-
-
-/**********************************************************************************************************************
-	This function saves the lexicographically sorted unique reads in a file. Used for debugging only.
-**********************************************************************************************************************/
-void Dataset::saveReads(string fileName)
-{
-	ofstream outputFile;
-	outputFile.open(fileName.c_str());
-	if(outputFile == NULL)
-		MYEXIT("Unable to open file: "+fileName);
-	for(UINT64 i = 1; i <= numberOfUniqueReads; i++)
-	{
-		Read * read1 = getReadFromID(i);
-		if(read1->superReadID!=0)
-		{
-			outputFile << setw(10) << i << " Contained in " <<  setw(10) << read1->superReadID << " " << read1->getStringForward() << endl;
-		}
-		else
-		{
-			outputFile << setw(10) << i << " Noncontained " <<  setw(10) << read1->superReadID << " " << read1->getStringForward() << endl;
-		}
-	}
-	outputFile.close();
-}
-
 /**********************************************************************************************************************
 	This function reads the dataset from FASTA/FASTQ files
 **********************************************************************************************************************/
