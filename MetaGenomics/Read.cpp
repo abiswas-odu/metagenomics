@@ -40,9 +40,18 @@ Read::Read(const string & s, UINT64 fIndx)
 Read::~Read(void)
 {
 	// delete all the pointers.
-	delete read;
+	if(read)
+		delete read;
 }
-
+/**********************************************************************************************************************
+	Destroy read sequence data
+**********************************************************************************************************************/
+void Read::freeBitSet()
+{
+	// delete the read pointer and set to NULL.
+	delete read;
+	read=NULL;
+}
 /**********************************************************************************************************************
 	Function to store the read.
 **********************************************************************************************************************/
@@ -74,15 +83,10 @@ void Read::setFileIndex(UINT64 id)
 /**********************************************************************************************************************
 	Returns the reverse complement of a read.
 **********************************************************************************************************************/
-string Read::reverseComplement() const {
-	return read->toRevComplement();
-}
-/**********************************************************************************************************************
-	This function adds a matpair
-**********************************************************************************************************************/
-bool Read::compareReadOverlap(UINT64 seq1Start, UINT64 seq1Len, Read * seq2, UINT64 seq2Start, UINT64 seq2Len, UINT64 orient)
+
+void Read::setReadHashOffset(UINT64 offset)
 {
-	return read->compareSubString(seq1Start,seq1Len,seq2->read,seq2Start,seq2Len, orient);
+	readHashOffset=offset;
 }
 
 

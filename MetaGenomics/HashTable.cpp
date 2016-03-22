@@ -92,7 +92,7 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parall
 **********************************************************************************************************************/
 bool HashTable::hashRead(const Read *read)
 {
-	string forwardRead = read->getStringForward();
+	string forwardRead = read->getStringFwd();
 
 	string prefixForward = forwardRead.substr(0,hashStringLength); 											// Prefix of the forward string.
 	string suffixForward = forwardRead.substr(forwardRead.length() - hashStringLength,hashStringLength);	// Suffix of the forward string.
@@ -176,9 +176,9 @@ UINT64 HashTable::hashFunction(const string & subString) const
 /**********************************************************************************************************************
 	Insert a subString in a hashTable
 **********************************************************************************************************************/
-bool HashTable::insertIntoTable(const Read *read, UINT64 *hashDataLengths)
+bool HashTable::insertIntoTable(Read *read, UINT64 *hashDataLengths)
 {
-	string forwardRead = read->getStringForward();
+	string forwardRead = read->getStringFwd();
 
 	string prefixForward = forwardRead.substr(0,hashStringLength); 											// Prefix of the forward string.
 	string suffixForward = forwardRead.substr(forwardRead.length() - hashStringLength,hashStringLength);	// Suffix of the forward string.
@@ -230,6 +230,12 @@ bool HashTable::insertIntoTable(const Read *read, UINT64 *hashDataLengths)
 	}
 	#pragma omp atomic
 		hashDataLengths[index] +=  dna_word + 1;
+
+	//store the offset of the read data in the read. This will be used from now on instead of the dna_bitset. dna_bitset will be freed...
+
+	UINT64	readHashOffset = baseOffset+currentOffset;
+	read->setReadHashOffset(readHashOffset);
+	read->freeBitSet();
 
 	/*store prefix reverse data*/
 	index = getHashIndex(suffixForward);						// Get the index using the hash function.
@@ -365,6 +371,22 @@ string HashTable::toString(UINT64 hashDataIndex,UINT64 stringLen) const
 		dna_str += strArr[base];
 	}
 	return dna_str;
+}
+UINT64 HashTable::getReadLength(UINT64 offset) const
+{
+	return ((hashData[offset] >> 48) & 0X0000000000007FFF); //2nd MSB to 16th MSB are read length
+}
+
+string HashTable::getStringForward(UINT64 offset) const
+{
+	UINT64 stringLen=getReadLength(offset);
+	return toString(offset+1,stringLen);
+}
+
+string HashTable::getStringReverse(UINT64 offset) const
+{
+	UINT64 stringLen=getReadLength(offset);
+	return reverseComplement(toString(offset+1,stringLen));
 }
 
 

@@ -137,7 +137,7 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 		if(line1.length() > minOverlap && testRead(line1) ) // Test the read is of good quality.
 		{
 			Read *r1=new Read(line1, fIndx);
-			UINT64 len = r1->getReadLength();
+			UINT64 len = line1.length();
 			if(len > longestReadLength)
 				longestReadLength = len;
 			if(len < shortestReadLength)
