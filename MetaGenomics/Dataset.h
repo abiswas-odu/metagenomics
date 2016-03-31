@@ -23,7 +23,6 @@ class Dataset
 		UINT64 minimumOverlapLength;						// Length of the shortest read in the dataset.
 		vector<Read *> *reads; 								// List of reads in the dataset.
 		string reverseComplement(const string & read); 		// Get the reverse complement of a string.
-		bool testRead(const string & read); 				// Test if the read is good. Contains only {A,C,G,T} and does not contain more than 80% of same base.
 															// The dataset contains only good quality reads.
 
 	public:
@@ -31,6 +30,8 @@ class Dataset
 		vector<string> singleEndDatasetFileNames;
 		UINT64 shortestReadLength;
 		UINT64 longestReadLength;
+
+		bool testRead(const string & read); 				// Test if the read is good. Contains only {A,C,G,T} and does not contain more than 80% of same base.
 
 		Dataset(void); 										// Default constructor.
 		Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFileNames,string fileNamePrefix, UINT64 minOverlap);// anotherconstructor.

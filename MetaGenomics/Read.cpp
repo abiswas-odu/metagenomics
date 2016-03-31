@@ -18,17 +18,14 @@ Read::Read(void)
 	// Initialize the variables.
 	readNumber = 0;
 	superReadID = 0;
-	read = new dna_bitset();
 	fileIndex=0;
 }
 
 /**********************************************************************************************************************
 	Another constructor
 **********************************************************************************************************************/
-Read::Read(const string & s, UINT64 fIndx)
+Read::Read(UINT64 fIndx)
 {
-	// Initialize the variables.
-	read = new dna_bitset(s, s.length());
 	readNumber = 0;
 	superReadID = 0;
 	fileIndex=fIndx;
@@ -40,28 +37,6 @@ Read::Read(const string & s, UINT64 fIndx)
 Read::~Read(void)
 {
 	// delete all the pointers.
-	if(read)
-		delete read;
-}
-/**********************************************************************************************************************
-	Destroy read sequence data
-**********************************************************************************************************************/
-void Read::freeBitSet()
-{
-	// delete the read pointer and set to NULL.
-	delete read;
-	read=NULL;
-}
-/**********************************************************************************************************************
-	Function to store the read.
-**********************************************************************************************************************/
-bool Read::setRead(const string & s)
-{
-	dna_bitset *tmpRead = new dna_bitset(s, s.length());
-	delete read;
-	read=NULL;
-	read = tmpRead;
-	return true;
 }
 /**********************************************************************************************************************
 	This function assigns an ID to the read.

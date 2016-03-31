@@ -24,8 +24,8 @@ class HashTable{
 		UINT16 hashStringLength;					// Ted: Length of prefix and suffix of the reads to hash. This is equal to the minumum overlap length.
 		mutable UINT64 numberOfHashCollision;		// Counter to count the number of hash collisions. For debugging only.
 													// It's mutable such that it can be modified in the const member function, getListOfReads
-		bool insertIntoTable(Read *read, UINT64 *hashDataLengths);	// Insert a string in the hash table.
-		bool hashRead(const Read *read); 					// Ted: Hash prefix and suffix of the read and its reverse complement in the hash table. Turn over to the constant
+		bool insertIntoTable(Read *read, string forwardRead, UINT64 *hashDataLengths);	// Insert a string in the hash table.
+		bool hashReadLengths(string forwardRead); 					// Ted: Hash prefix and suffix of the read and its reverse complement in the hash table. Turn over to the constant
 		void setHashTableSize(UINT64 size); 		// Set the size of the hash table.
 		void setHashTableDataSize(UINT64 size);		// Set the size of the hash data table.
 		string reverseComplement(const std::string & seq) const;
@@ -45,6 +45,12 @@ class HashTable{
 		string getStringForward(UINT64 offset) const; 									// Get the forward string of the read at offset.
 		string getStringReverse(UINT64 offset) const;  								// Get the reverse string of the read at offset.
 		UINT64 getReadLength(UINT64 offset) const; 								// Get the length of the string in the read at offset.
+
+		void readReadLengthsFromFile(string fileName, UINT64 minOverlap);
+		void populateReadLengths();												//Populate the read lengths in the hash table for future offset calculation
+		void populateReadData();												//Populate the read sequence in the hash data
+		void readReadSequenceFromFile(string fileName, UINT64 minOverlap, UINT64 *hashDataLengths, UINT64 &readID);
+
 };
 
 

@@ -57,11 +57,9 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parall
 	setHashTableSize(size);
 	UINT64 noOfReads=d->getNumberOfUniqueReads();
 
-	#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
-	for(UINT64 i = 1; i <= noOfReads; i++)		// For each read in the dataset
-		hashRead(d->getReadFromID(i)); 								// Calculate the offset lengths of each hash table key in the hash table.
+	populateReadLengths(); 				//Each hash entry is populated with the length of it's record
 
-	//Change lengths to offsets...
+	//Change lengths of records to offset at each index...
 	UINT64 nextOffset=hashTable[0];
 	hashTable[0]=0;
 	for(size_t i=1; i<hashTableSize; i++)
@@ -70,30 +68,207 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parall
 		nextOffset=hashTable[i];
 		hashTable[i]=tempOffset;
 	}
-	size_t totalDataSize = nextOffset + hashTable[hashTableSize-1];
+	size_t totalDataSize = nextOffset + hashTable[hashTableSize-1];   //Calculate the size of the hash data table
 	setHashTableDataSize(totalDataSize);
-	UINT64 *hashDataLengths = new UINT64[hashTableSize];
-	std::memset(hashDataLengths, 0, hashTableSize*sizeof(UINT64));
-
-	#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
-	for(UINT64 i = 1; i <= noOfReads; i++)		// For each read in the dataset
-	{
-		insertIntoTable(d->getReadFromID(i),hashDataLengths);
-	}
-	delete hashDataLengths;
+	populateReadData();												//Populate the hash data table wit reads
 	CLOCKSTOP;
 	return true;
 }
 
+/**********************************************************************************************************************
+	Insert a read lengths in the hashTable
+**********************************************************************************************************************/
+void HashTable::populateReadLengths()
+{
+	CLOCKSTART;
+	for(UINT64 i = 0; i < dataSet->pairedEndDatasetFileNames.size(); i++)						// Read the paired-end datasets.
+	{
+		readReadLengthsFromFile(dataSet->pairedEndDatasetFileNames.at(i), hashStringLength+1);
+	}
+
+	for(UINT64 i = 0; i < dataSet->singleEndDatasetFileNames.size(); i++)						// Read the single-end datasets.
+	{
+		readReadLengthsFromFile(dataSet->singleEndDatasetFileNames.at(i), hashStringLength+1);
+	}
+	CLOCKSTOP;
+}
 
 
 /**********************************************************************************************************************
-	Insert a read in the hashTable
+	Insert a read sequence in hashData
 **********************************************************************************************************************/
-bool HashTable::hashRead(const Read *read)
+void HashTable::populateReadData()
 {
-	string forwardRead = read->getStringFwd();
+	CLOCKSTART;
+	UINT64 *hashDataLengths = new UINT64[hashTableSize];
+	std::memset(hashDataLengths, 0, hashTableSize*sizeof(UINT64));
+	UINT64 readID=0;
+	for(UINT64 i = 0; i < dataSet->pairedEndDatasetFileNames.size(); i++)						// Read the paired-end datasets.
+	{
+		readReadSequenceFromFile(dataSet->pairedEndDatasetFileNames.at(i), hashStringLength+1, hashDataLengths, readID);
+	}
 
+	for(UINT64 i = 0; i < dataSet->singleEndDatasetFileNames.size(); i++)						// Read the single-end datasets.
+	{
+		readReadSequenceFromFile(dataSet->singleEndDatasetFileNames.at(i), hashStringLength+1, hashDataLengths, readID);
+	}
+	delete hashDataLengths;
+	CLOCKSTOP;
+}
+
+/**********************************************************************************************************************
+	Read sequence lengths into the hashTable
+**********************************************************************************************************************/
+void HashTable::readReadLengthsFromFile(string fileName, UINT64 minOverlap)
+{
+	CLOCKSTART;
+	cout << "Reading read lengths from file: " << fileName << endl;
+	ifstream myFile;
+	myFile.open (fileName.c_str());
+	if(myFile == NULL)
+		MYEXIT("Unable to open file: "+fileName)
+	UINT64 goodReads = 0, badReads = 0;
+	vector<string> line;
+	string text;
+	enum FileType { FASTA, FASTQ, UNDEFINED};
+	FileType fileType = UNDEFINED;
+	while(getline(myFile,text))
+	{
+		string line1="",line0="";
+		if( (goodReads + badReads ) != 0 && (goodReads + badReads)%1000000 == 0)
+			cout<< setw(10) << goodReads + badReads << " read lengths added in hashtable. " << setw(10) << goodReads << " good reads." << setw(10) << badReads << " bad reads." << endl;
+		if(fileType == UNDEFINED)
+		{
+			if(text[0] == '>')
+				fileType = FASTA;
+			else if(text[0] == '@')
+				fileType = FASTQ;
+			else
+				MYEXIT("Unknown input file format.");
+		}
+		line.clear();
+		if(fileType == FASTA) 			// Fasta file
+		{
+			line.push_back(text);
+			getline (myFile,text,'>');
+			line.push_back(text);
+
+			line.at(1).erase(std::remove(line.at(1).begin(), line.at(1).end(), '\n'), line.at(1).end());
+			line.at(0).erase(std::remove(line.at(0).begin(),line.at(0).end(),'>'),line.at(0).end());			//Sequence name
+			line0=line.at(0);
+			line1 = line.at(1);								// The first string is in the 2nd line.
+
+		}
+		else if(fileType == FASTQ) 					// Fastq file.
+		{
+			line.push_back(text);
+			for(UINT64 i = 0; i < 3; i++) 	// Read the remaining 3 lines. Total of 4 lines represent one sequence in a fastq file.
+			{
+				getline (myFile,text);
+				line.push_back(text);
+			}
+			line.at(0).erase(std::remove(line.at(0).begin(),line.at(0).end(),'>'),line.at(0).end());			//Sequence name
+			line0=line.at(0);
+			line1 = line.at(1); 			// The first string is in the 2nd line.
+		}
+		for (std::string::iterator p = line1.begin(); line1.end() != p; ++p) // Change the case
+		    *p = toupper(*p);
+		if(line1.length() > minOverlap && dataSet->testRead(line1) ) // Test the read is of good quality.
+		{
+			hashReadLengths(line1); 								// Calculate the offset lengths of each hash table key in the hash table.
+			goodReads++;
+		}
+		else
+			badReads++;
+	}
+
+	myFile.close();
+    cout << "File name: " << fileName << endl;
+	cout << setw(10) << goodReads << " good reads in current file."  << endl;
+	cout << setw(10) << badReads << " bad reads in current file." << endl;
+	cout << setw(10) << goodReads + badReads << " total reads in current file." << endl;
+	CLOCKSTOP;
+}
+
+/**********************************************************************************************************************
+	Read sequence data into hashData
+**********************************************************************************************************************/
+void HashTable::readReadSequenceFromFile(string fileName, UINT64 minOverlap, UINT64 *hashDataLengths, UINT64 &readID)
+{
+	CLOCKSTART;
+	cout << "Reading read data from file: " << fileName << endl;
+	ifstream myFile;
+	myFile.open (fileName.c_str());
+	if(myFile == NULL)
+		MYEXIT("Unable to open file: "+fileName)
+	UINT64 goodReads = 0, badReads = 0;
+	vector<string> line;
+	string text;
+	enum FileType { FASTA, FASTQ, UNDEFINED};
+	FileType fileType = UNDEFINED;
+	while(getline(myFile,text))
+	{
+		string line1="",line0="";
+		if( (goodReads + badReads ) != 0 && (goodReads + badReads)%1000000 == 0)
+			cout<< setw(10) << goodReads + badReads << " read lengths added in hashtable. " << setw(10) << goodReads << " good reads." << setw(10) << badReads << " bad reads." << endl;
+		if(fileType == UNDEFINED)
+		{
+			if(text[0] == '>')
+				fileType = FASTA;
+			else if(text[0] == '@')
+				fileType = FASTQ;
+			else
+				MYEXIT("Unknown input file format.");
+		}
+		line.clear();
+		if(fileType == FASTA) 			// Fasta file
+		{
+			line.push_back(text);
+			getline (myFile,text,'>');
+			line.push_back(text);
+
+			line.at(1).erase(std::remove(line.at(1).begin(), line.at(1).end(), '\n'), line.at(1).end());
+			line.at(0).erase(std::remove(line.at(0).begin(),line.at(0).end(),'>'),line.at(0).end());			//Sequence name
+			line0=line.at(0);
+			line1 = line.at(1);								// The first string is in the 2nd line.
+
+		}
+		else if(fileType == FASTQ) 					// Fastq file.
+		{
+			line.push_back(text);
+			for(UINT64 i = 0; i < 3; i++) 	// Read the remaining 3 lines. Total of 4 lines represent one sequence in a fastq file.
+			{
+				getline (myFile,text);
+				line.push_back(text);
+			}
+			line.at(0).erase(std::remove(line.at(0).begin(),line.at(0).end(),'>'),line.at(0).end());			//Sequence name
+			line0=line.at(0);
+			line1 = line.at(1); 			// The first string is in the 2nd line.
+		}
+		for (std::string::iterator p = line1.begin(); line1.end() != p; ++p) // Change the case
+		    *p = toupper(*p);
+		if(line1.length() > minOverlap && dataSet->testRead(line1) ) // Test the read is of good quality.
+		{
+			readID++;
+			insertIntoTable(dataSet->getReadFromID(readID), line1 ,hashDataLengths); 								// Calculate the offset lengths of each hash table key in the hash table.
+			goodReads++;
+		}
+		else
+			badReads++;
+	}
+
+	myFile.close();
+    cout << "File name: " << fileName << endl;
+	cout << setw(10) << goodReads << " good reads in current file."  << endl;
+	cout << setw(10) << badReads << " bad reads in current file." << endl;
+	cout << setw(10) << goodReads + badReads << " total reads in current file." << endl;
+	CLOCKSTOP;
+}
+/**********************************************************************************************************************
+	Insert a read length in the hashTable
+**********************************************************************************************************************/
+bool HashTable::hashReadLengths(string forwardRead)
+{
 	string prefixForward = forwardRead.substr(0,hashStringLength); 											// Prefix of the forward string.
 	string suffixForward = forwardRead.substr(forwardRead.length() - hashStringLength,hashStringLength);	// Suffix of the forward string.
 
@@ -101,12 +276,10 @@ bool HashTable::hashRead(const Read *read)
 	size_t dna_word = (forwardRead.length() / 32) + (forwardRead.length() % 32 != 0);
 
 	UINT64 index = getHashIndex(prefixForward);						// Get the index using the hash function.
-	#pragma omp atomic
-		hashTable[index]+=(dna_word+1);
+	hashTable[index]+=(dna_word+1);
 
 	index = getHashIndex(suffixForward);
-	#pragma omp atomic
-		hashTable[index]+=(dna_word+1);
+	hashTable[index]+=(dna_word+1);
 
 	return true;
 }
@@ -176,10 +349,8 @@ UINT64 HashTable::hashFunction(const string & subString) const
 /**********************************************************************************************************************
 	Insert a subString in a hashTable
 **********************************************************************************************************************/
-bool HashTable::insertIntoTable(Read *read, UINT64 *hashDataLengths)
+bool HashTable::insertIntoTable(Read *read, string forwardRead, UINT64 *hashDataLengths)
 {
-	string forwardRead = read->getStringFwd();
-
 	string prefixForward = forwardRead.substr(0,hashStringLength); 											// Prefix of the forward string.
 	string suffixForward = forwardRead.substr(forwardRead.length() - hashStringLength,hashStringLength);	// Suffix of the forward string.
 
@@ -228,14 +399,12 @@ bool HashTable::insertIntoTable(Read *read, UINT64 *hashDataLengths)
 			throw std::invalid_argument("invalid DNA base");
 		}
 	}
-	#pragma omp atomic
-		hashDataLengths[index] +=  dna_word + 1;
+	hashDataLengths[index] +=  dna_word + 1;
 
-	//store the offset of the read data in the read. This will be used from now on instead of the dna_bitset. dna_bitset will be freed...
+	//store the offset of the read data in the read. This will be used to obtain the sequence instead of storing the read sequence in the read object.
 
 	UINT64	readHashOffset = baseOffset+currentOffset;
 	read->setReadHashOffset(readHashOffset);
-	read->freeBitSet();
 
 	/*store prefix reverse data*/
 	index = getHashIndex(suffixForward);						// Get the index using the hash function.
@@ -264,8 +433,7 @@ bool HashTable::insertIntoTable(Read *read, UINT64 *hashDataLengths)
 			throw std::invalid_argument("invalid DNA base");
 		}
 	}
-	#pragma omp atomic
-		hashDataLengths[index] += dna_word + 1;
+	hashDataLengths[index] += dna_word + 1;
 	return true;
 }
 

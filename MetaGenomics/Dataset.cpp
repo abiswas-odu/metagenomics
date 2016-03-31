@@ -49,23 +49,23 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 
 	for(UINT64 i = 0; i < pairedEndDatasetFileNames.size(); i++)						// Read the paired-end datasets.
 	{
-		UINT64 startReadID=numberOfReads;
+		UINT64 startReadID=fileIndex;
 		readDataset(pairedEndDatasetFileNames.at(i), minimumOverlapLength, counter++, fileIndex);
-		if(numberOfReads <= startReadID)
+		if(fileIndex <= startReadID)
 			MYEXIT("File empty. No reads loaded from "+ pairedEndDatasetFileNames.at(i));
 		filePointer<<pairedEndDatasetFileNames.at(i)<<": Paired-end file "<<i+1<<"\nReadID Range: ("<<startReadID+1<<",";
-		filePointer<<numberOfReads<<")\n";
+		filePointer<<fileIndex<<")\n";
 	}
 
 	for(UINT64 i = 0; i < singleEndDatasetFileNames.size(); i++)						// Read the single-end datasets.
 	{
-		UINT64 startReadID=numberOfReads;
+		UINT64 startReadID=fileIndex;
 		readDataset(singleEndDatasetFileNames.at(i), minimumOverlapLength, counter++, fileIndex);
 
-		if(numberOfReads <= startReadID)
+		if(fileIndex <= startReadID)
 			MYEXIT("File empty. No reads loaded from "+ singleEndDatasetFileNames.at(i));
 		filePointer<<singleEndDatasetFileNames.at(i)<<": Singleton file "<<i+1<<"\nReadID Range: ("<<startReadID+1<<",";
-		filePointer<<numberOfReads<<")\n";
+		filePointer<<fileIndex<<")\n";
 	}
 	filePointer.close();
 	cout << endl << "Shortest read length in all datasets: " << setw(5) << shortestReadLength<<endl;
@@ -136,7 +136,7 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 		    *p = toupper(*p);
 		if(line1.length() > minOverlap && testRead(line1) ) // Test the read is of good quality.
 		{
-			Read *r1=new Read(line1, fIndx);
+			Read *r1=new Read(fIndx);
 			UINT64 len = line1.length();
 			if(len > longestReadLength)
 				longestReadLength = len;
