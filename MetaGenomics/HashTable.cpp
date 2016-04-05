@@ -34,16 +34,16 @@ UINT64 getPrimeLargerThanNumber(UINT64 number)
 /**********************************************************************************************************************
 	Default Constructor
 **********************************************************************************************************************/
-HashTable::HashTable(void)
+HashTable::HashTable(UINT64 parallelProcessPoolSize)
 {
 	// Initialize the variables.
 	hashStringLength = 0;
 	numberOfHashCollision = 0;
-	memoryHashPartitions = new vector<UINT64>;
-	memoryDataPartitions = new vector<UINT64>;
-	hashTable=NULL;
-	hashData=NULL;
-	win=NULL;
+	memoryHashPartitions = new vector<UINT64>(parallelProcessPoolSize,0);
+	memoryDataPartitions = new vector<UINT64>(parallelProcessPoolSize,0);
+	hashTable = NULL;
+	hashData = NULL;
+	win = MPI_WIN_NULL;
 }
 
 
@@ -84,15 +84,10 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parall
 		currWinSize+=hashTable[i]-hashTable[i-1];
 		if(currWinSize>=minWindowSize)
 		{
-			currWinSize=0;
-			memoryHashPartitions->push_back(i-1);						//The hash index upto which the MPI rank stores the data (MPI rank == vector index)
+			memoryHashPartitions->push_back(i);						//The hash index upto which the MPI rank stores the data (MPI rank == vector index)
 			memoryDataPartitions->push_back(hashTable[i]);			//The data index upto which the MPI rank stores value (MPI rank == vector index)
+			currWinSize=0;
 		}
-	}
-	UINT64 finalSize = memoryDataPartitions->at(memoryDataPartitions->size()-1);
-	for(int i=memoryDataPartitions->size(); i<parallelProcessPoolSize; i++)
-	{
-		memoryDataPartitions->push_back(finalSize);
 	}
 	setHashTableDataSize(myid);
 	return true;
@@ -328,6 +323,7 @@ void HashTable::setHashTableSize(UINT64 size)
 void HashTable::setHashTableDataSize(int myid)
 {
 	int numElements=memoryDataPartitions->at(myid);
+	hashData = new UINT64[numElements];
 	MPI_Win_create(hashData, numElements, sizeof(UINT64), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
 	for(int i = 0; i < numElements; i++)
 		hashData[i] = 0;

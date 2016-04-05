@@ -35,7 +35,7 @@ class HashTable{
 		UINT64 getHashIndex(const string & subString) const;	//Convert a set of data bytes from hash data table to DNA string
 		string toString(UINT64 hashDataIndex,UINT64 stringLen) const;
 	public:
-		HashTable(void);							// Default constructor.
+		HashTable(UINT64 parallelProcessPoolSize);							// Default constructor.
 		~HashTable();								// Destructor.
 		void createOffsetTable();
 		bool insertDataset(Dataset *d, UINT64 minOverlapLength,UINT64 parallelThreadPoolSize,int myid);	// Insert the dataset in the hash table.

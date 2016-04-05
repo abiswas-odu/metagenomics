@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 	UINT64 writeGraphSize = MAX_PAR_GRAPH_SIZE;
 	parseArguments(argc, argv, pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength, startFromUnitigGraph, maxThreads, writeGraphSize);
 	Dataset *dataSet = new Dataset(pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength);
-	HashTable *hashTable=new HashTable();
+	HashTable *hashTable=new HashTable(numprocs);
 	hashTable->insertDataset(dataSet, minimumOverlapLength,numprocs, myid);
 	//OverlapGraph *overlapGraph;
 	//overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName); //hashTable deleted by this function after building the graph also writes graph
