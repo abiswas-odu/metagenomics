@@ -68,6 +68,7 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 		filePointer<<fileIndex<<")\n";
 	}
 	filePointer.close();
+
 	cout << endl << "Shortest read length in all datasets: " << setw(5) << shortestReadLength<<endl;
 	cout << " Longest read length in all datasets: " << setw(5) << longestReadLength <<endl;
 
