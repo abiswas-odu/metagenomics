@@ -75,7 +75,7 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 	for(UINT64 i = 0 ; i < reads->size(); i++) 		// Assing ID's to the reads.
 		reads->at(i)->setReadNumber(i + 1);
 	numberOfUniqueReads=reads->size();
-	reads->shrink_to_fit();
+	//reads->shrink_to_fit();
 }
 /**********************************************************************************************************************
 	This function reads the dataset from FASTA/FASTQ files
