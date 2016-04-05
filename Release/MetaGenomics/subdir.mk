@@ -4,13 +4,13 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 CPP_SRCS += \
-../MetaGenomics/Dataset.cpp \
-../MetaGenomics/Edge.cpp \
-../MetaGenomics/HashTable.cpp \
-../MetaGenomics/OverlapGraph.cpp \
-../MetaGenomics/Read.cpp \
-../MetaGenomics/dna.cpp \
-../MetaGenomics/main.cpp 
+../../MetaGenomics/Dataset.cpp \
+../../MetaGenomics/Edge.cpp \
+../../MetaGenomics/HashTable.cpp \
+../../MetaGenomics/OverlapGraph.cpp \
+../../MetaGenomics/Read.cpp \
+../../MetaGenomics/dna.cpp \
+../../MetaGenomics/main.cpp 
 
 OBJS += \
 ./MetaGenomics/Dataset.o \
