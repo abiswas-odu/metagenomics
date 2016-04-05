@@ -246,7 +246,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 		}
 	}
 	delete allMarked;
-	delete hashTable;	// Do not need the hash table any more.
 	cout<<endl<<"Graph Construction Complete"<<endl;
 	CLOCKSTOP;
 	return true;

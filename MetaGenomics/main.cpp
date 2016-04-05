@@ -2,7 +2,7 @@
  * main.cpp
  *
  * Created on: April 22, 2013
- * Author: Md. Bahlul Haider
+ * Author: Md. Bahlul Haider, Abhishek Biswas
  * Version: 0.1 (Alpha)
  */
 
@@ -18,7 +18,14 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 
 int main(int argc, char **argv)
 {
-	CLOCKSTART;
+	int numprocs, myid;
+	double start, end;
+	MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
+	MPI_Comm_rank(MPI_COMM_WORLD,&myid);
+	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
+	start = MPI_Wtime();
+
 	UINT64 minimumOverlapLength;
 	vector<string> pairedEndFileNames, singleEndFileNames;
 	string allFileName;
@@ -27,13 +34,21 @@ int main(int argc, char **argv)
 	UINT64 writeGraphSize = MAX_PAR_GRAPH_SIZE;
 	parseArguments(argc, argv, pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength, startFromUnitigGraph, maxThreads, writeGraphSize);
 	Dataset *dataSet = new Dataset(pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength);
-	OverlapGraph *overlapGraph;
 	HashTable *hashTable=new HashTable();
-	hashTable->insertDataset(dataSet, minimumOverlapLength,maxThreads);
-	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName); //hashTable deleted by this function after building the graph also writes graph
-	delete dataSet;
-	delete overlapGraph;
-	CLOCKSTOP;
+	hashTable->insertDataset(dataSet, minimumOverlapLength,numprocs, myid);
+	//OverlapGraph *overlapGraph;
+	//overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName); //hashTable deleted by this function after building the graph also writes graph
+	delete hashTable;	// Do not need the hash table any more.
+	//delete dataSet;
+	//delete overlapGraph;
+
+	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
+	end = MPI_Wtime();
+
+	if (myid == 0) { /* use time on master node */
+	    printf("Runtime for %d processes = %f\n", numprocs, end-start);
+	}
+	MPI_Finalize();
 }
 
 /**********************************************************************************************************************
@@ -47,7 +62,7 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 	startFromUnitigGraph = false;
 	vector<string> argumentsList;
 	cout << "PRINTING ARGUMENTS" << endl;
-	for(UINT64 i = 0; i < argc; i++)
+	for(int i = 0; i < argc; i++)
 	{
 		cout << argv[i] << ' ';
 	}

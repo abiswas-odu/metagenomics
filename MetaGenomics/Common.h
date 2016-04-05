@@ -33,6 +33,7 @@
 #include <cmath>
 #include <ctime>
 #include <functional>
+#include "mpi.h"
 
 using namespace std;
 
