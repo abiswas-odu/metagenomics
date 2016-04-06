@@ -45,16 +45,20 @@ class HashTable{
 		UINT64 getHashStringLength() const {return hashStringLength;}		// Get the hash string length.
 		Dataset * getDataset(void) const {return dataSet;}					// Get the pointer to the dataset.
 
-		UINT64 getLocalOffset(UINT64 globalOffset, int myid);
-
-		string getStringForward(UINT64 offset) const; 									// Get the forward string of the read at offset.
-		string getStringReverse(UINT64 offset) const;  								// Get the reverse string of the read at offset.
-		UINT64 getReadLength(UINT64 offset) const; 								// Get the length of the string in the read at offset.
+		string getStringForward(UINT64 globalOffset, int myid) const; 			// Get the forward string of the read at offset.
+		string getStringReverse(UINT64 globalOffset, int myid) const;  			// Get the reverse string of the read at offset.
+		UINT64 getReadLength(UINT64 globalOffset, int myid) const; 								// Get the length of the string in the read at offset.
 
 		void readReadLengthsFromFile(string fileName, UINT64 minOverlap);
 		void populateReadLengths();												//Populate the read lengths in the hash table for future offset calculation
 		void populateReadData(int myid);												//Populate the read sequence in the hash data
 		void readReadSequenceFromFile(string fileName, UINT64 minOverlap, UINT64 *hashDataLengths, UINT64 &readID, int myid);
+
+		/*MPI Related Routines*/
+		UINT64 getLocalOffset(UINT64 globalOffset, int myid) const;
+		bool isGlobalOffsetInRange(UINT64 globalOffset, int myid) const;
+		int getOffsetRank(UINT64 globalOffset) const;
+		string toStringMPI(UINT64  *hashDataBlock,UINT64 stringLen) const;
 };
 
 
