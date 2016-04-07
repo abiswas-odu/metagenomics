@@ -290,7 +290,6 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 			r->superReadID=containingReadID;
 		}
 	    filePointer.close();
-	    return;
 	}
 	else
 	{
@@ -419,45 +418,6 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 	orient 3 means prefix of reverse of the read2
 	We need to check if the remaining of the stings match to see if read2 is contained in read1.
 **********************************************************************************************************************/
-/*bool OverlapGraph::checkOverlapForContainedRead(Read *read1, Read *read2, UINT64 orient, UINT64 start)
-{
-	UINT64 string1Len=hashTable->getReadLength(read1->getReadHashOffset());
-	UINT64 hashStringLength = hashTable->getHashStringLength(), lengthRemaining1, lengthRemaining2;
-	UINT64 string2Len = hashTable->getReadLength(read2->getReadHashOffset());
-	if(orient == 0 || orient == 2)
-									// orient 0
-									//   >--------MMMMMMMMMMMMMMM*******------> read1      M means match found by hash table
-									//            MMMMMMMMMMMMMMM*******>       read2      * means we need to check these characters for match
-									//				OR
-									// orient 2
-									//	 >---*****MMMMMMMMMMMMMMM*******------> read1
-									//		      MMMMMMMMMMMMMMM*******<	    Reverese complement of read2
-	{
-		lengthRemaining1 = string1Len - start - hashStringLength; 	// This is the remaining of read1
-		lengthRemaining2 = string2Len - hashStringLength; 	// This is the remaining of read2
-		if(lengthRemaining1 >= lengthRemaining2)
-		{
-			return read1->compareReadOverlap(start + hashStringLength,lengthRemaining2, read2, hashStringLength,lengthRemaining2, orient); 	// If the remaining of the string match, then read2 is contained in read1
-		}
-	}
-	else							// orient 1
-									//   >---*****MMMMMMMMMMMMMMM-------------> read1      M means match found by hash table
-									//      >*****MMMMMMMMMMMMMMM       		read2      * means we need to check these characters for match
-									//				OR
-									// orient 3
-									//	 >---*****MMMMMMMMMMMMMMM-------------> read1
-									//		<*****MMMMMMMMMMMMMMM				Reverse Complement of Read2
-	{
-		lengthRemaining1 = start;
-		lengthRemaining2 = string2Len - hashStringLength;
-		if(lengthRemaining1 >= lengthRemaining2)
-		{
-			return read1->compareReadOverlap(start - lengthRemaining2,lengthRemaining2, read2, 0,lengthRemaining2, orient);	// If the remaining of the string match, then read2 is contained in read1
-		}
-	}
-	return false;
-}*/
-
 bool OverlapGraph::checkOverlapForContainedRead(string read1, Read *read2, UINT64 orient, UINT64 start)
 {
 	UINT64 hashStringLength = hashTable->getHashStringLength(), lengthRemaining1, lengthRemaining2;
@@ -510,37 +470,6 @@ bool OverlapGraph::checkOverlapForContainedRead(string read1, Read *read2, UINT6
 	Orientation 3 means prefix of reverse of the read2
 	We need to check if the remaining of the stings match to see if read1 and read2 overlap.
 **********************************************************************************************************************/
-/*bool OverlapGraph::checkOverlap(Read *read1, Read *read2, UINT64 orient, UINT64 start)
-{
-	UINT64 string1Len=read1->getReadLength();
-	UINT64 hashStringLength = hashTable->getHashStringLength();
-	UINT64 string2Len = read2->getReadLength();
-	if(orient == 0 || orient == 2)		// orient 0
-										//   >--------MMMMMMMMMMMMMMM*************> 			read1      M means match found by hash table
-										//            MMMMMMMMMMMMMMM*************------->      read2      * means we need to check these characters for match
-										//				OR
-										// orient 2
-										//	 >---*****MMMMMMMMMMMMMMM*************> 			read1
-										//		      MMMMMMMMMMMMMMM*************-------<	    Reverese complement of read2
-	{
-		if(string1Len- start - hashStringLength >= string2Len - hashStringLength) // The overlap must continue till the end.
-			return false;
-		return read1->compareReadOverlap(start + hashStringLength, string1Len-(start + hashStringLength),read2,hashStringLength,  string1Len-(start + hashStringLength), orient); 	// If the remaining strings match.
-	}
-	else								// orient 1
-										//   	>********MMMMMMMMMMMMMMM-------------> 			read1      M means match found by hash table
-										//  >----********MMMMMMMMMMMMMMM       		    		read2      * means we need to check these characters for match
-										//				OR
-										// orient 3
-										//	 	>********MMMMMMMMMMMMMMM-------------> 			read1
-										//	<----********MMMMMMMMMMMMMMM						Reverse Complement of Read2
-	{
-		if(string2Len-hashStringLength < start)
-			return false;
-		return read1->compareReadOverlap(0, start,read2,string2Len-hashStringLength-start, start,orient);
-	}
-}*/
-
 bool OverlapGraph::checkOverlap(string read1, Read *read2, UINT64 orient, UINT64 start)
 {
 	UINT64 hashStringLength = hashTable->getHashStringLength();

@@ -56,7 +56,7 @@ typedef long long INT64;
 
 //Multi-thread parallel options
 #define DEF_THREAD_COUNT 4
-#define MAX_PAR_GRAPH_SIZE 10000
+#define MAX_PAR_GRAPH_SIZE 1000
 
 //	Exit code that displays the place of exit and message.
 #define MYEXIT(a) { cout << endl << "Exit from File: " << __FILE__ << " Line: " << __LINE__ << " Function: " << __FUNCTION__ << "()" << endl << "Message: " << a << endl; exit(0);}
