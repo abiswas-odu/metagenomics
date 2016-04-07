@@ -264,6 +264,11 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 	ofstream filePointer;
 	UINT64 nonContainedReads = 0;
 	string containedReadFile = fnamePrefix+"_containedReads.txt";
+	if (std::ifstream(containedReadFile))
+	{
+	     cout << "Contained read file already exists. Using this file." <<endl;
+	     return;
+	}
 	filePointer.open(containedReadFile.c_str());
 	if(filePointer == NULL)
 		MYEXIT("Unable to open file: +"+fnamePrefix+"_containedReads.txt");
