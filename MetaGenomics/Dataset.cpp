@@ -234,6 +234,21 @@ Read * Dataset::getReadFromID(UINT64 ID)
 	return reads->at(ID - 1);
 }
 
+/**********************************************************************************************************************
+	This function returns a read from its FileIndex.
+**********************************************************************************************************************/
+Read * Dataset::getReadFromFileIndex(UINT64 fID)
+{
+	UINT64 readID=0;
+	for(size_t i=0;i<reads->size();i++)
+	{
+		if(reads->at(i)->getFileIndex()==fID)
+			readID = reads->at(i)->getReadNumber();
+	}
+	return getReadFromID(readID);
+}
+
+
 
 /**********************************************************************************************************************
 	Default destructor

@@ -41,6 +41,7 @@ class Dataset
 		UINT64 getNumberOfUniqueReads(void); 				// Get the number of unique reads in the database.
 		bool printDataset(void); 							// Print few the reads in the dataset. For debuggin only.
         Read * getReadFromID(UINT64 ID); 					// Find a read in the database given the ID in constant time.
+        Read * getReadFromFileIndex(UINT64 fID);
 };
 
 
