@@ -240,7 +240,8 @@ Read * Dataset::getReadFromID(UINT64 ID)
 Read * Dataset::getReadFromFileIndex(UINT64 fID)
 {
 	UINT64 readID=0;
-	for(size_t i=fID;i>0;i--)
+	size_t i = fID<reads->size()?fID:reads->size();
+	for(;i>0;i--)
 	{
 		if(reads->at(i)->getFileIndex()==fID)
 			readID = reads->at(i)->getReadNumber();
