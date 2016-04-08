@@ -39,7 +39,7 @@ class HashTable{
 		~HashTable();								// Destructor.
 		void createOffsetTable();
 		bool insertDataset(Dataset *d, UINT64 minOverlapLength,UINT64 parallelThreadPoolSize,int myid);	// Insert the dataset in the hash table.
-		vector<UINT64> * getListOfReads(const string & subString) const; 			// Get the list of reads that contain subString as prefix or suffix.
+		vector<UINT64> * getListOfReads(const string & subString, int myid) const; 			// Get the list of reads that contain subString as prefix or suffix.
 		UINT64 hashFunction(const string & subString) const; 						// Hash function.
 		UINT64 getHashTableSize(void) const {return hashTableSize;}		// Get the size of the hash table.
 		UINT64 getHashStringLength() const {return hashStringLength;}		// Get the hash string length.
@@ -58,7 +58,7 @@ class HashTable{
 		UINT64 getLocalOffset(UINT64 globalOffset, int myid) const;
 		bool isGlobalOffsetInRange(UINT64 globalOffset, int myid) const;
 		int getOffsetRank(UINT64 globalOffset) const;
-		string toStringMPI(UINT64  *hashDataBlock,UINT64 stringLen) const;
+		string toStringMPI(UINT64  *hashDataBlock,UINT64 stringLen,  UINT64 startOffset) const;
 };
 
 

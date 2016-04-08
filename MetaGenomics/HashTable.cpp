@@ -519,51 +519,106 @@ int HashTable::getOffsetRank(UINT64 globalOffset) const
 /**********************************************************************************************************************
 	Returns a list of read containing the subString as prefix or suffix.
 **********************************************************************************************************************/
-vector<UINT64> * HashTable::getListOfReads(const string & subString) const
+vector<UINT64> * HashTable::getListOfReads(const string & subString, int myid) const
 {
 	vector<UINT64> * readHits = new vector<UINT64>;
 	UINT64 index = getHashIndex(subString);	// Get the index using the hash function.
-	UINT64 startOffset=hashTable[index];
-	UINT64 endOffset= (index==hashTableSize-1)?hashDataTableSize:hashTable[index+1];
-	while(startOffset<endOffset)
+	UINT64 globalStartOffset=hashTable[index];
+	UINT64 globalEndOffset= (index==hashTableSize-1)?hashDataTableSize:hashTable[index+1];
+	if(isGlobalOffsetInRange(globalStartOffset,myid))
 	{
-		UINT64 readID = hashData[startOffset] & 0X0000FFFFFFFFFFFF;
-		UINT64 orient = hashData[startOffset] >> 63;
-		UINT64 stringLen = (hashData[startOffset] >> 48) & 0X0000000000007FFF;
-		UINT64 dataLen = (stringLen / 32) + (stringLen % 32 != 0);
-		if(orient==0){
-			string forwardRead = toString(startOffset+1,stringLen);
-			string prefixForward = forwardRead.substr(0,hashStringLength);
-			string suffixReverse = reverseComplement(prefixForward);
-			if(subString==prefixForward)
-			{
-				UINT64 orientation=0;
-				UINT64 data = readID | (orientation << 62);
-				readHits->push_back(data);
+		UINT64 startOffset = getLocalOffset(globalStartOffset,myid);
+		UINT64 endOffset = getLocalOffset(globalEndOffset,myid);
+		while(startOffset<endOffset)
+		{
+			UINT64 readID = hashData[startOffset] & 0X0000FFFFFFFFFFFF;
+			UINT64 orient = hashData[startOffset] >> 63;
+			UINT64 stringLen = (hashData[startOffset] >> 48) & 0X0000000000007FFF;
+			UINT64 dataLen = (stringLen / 32) + (stringLen % 32 != 0);
+			if(orient==0){
+				string forwardRead = toString(startOffset+1,stringLen);
+				string prefixForward = forwardRead.substr(0,hashStringLength);
+				string suffixReverse = reverseComplement(prefixForward);
+				if(subString==prefixForward)
+				{
+					UINT64 orientation=0;
+					UINT64 data = readID | (orientation << 62);
+					readHits->push_back(data);
+				}
+				else if(subString==suffixReverse){
+					UINT64 orientation=3;
+					UINT64 data = readID | (orientation << 62);
+					readHits->push_back(data);
+				}
 			}
-			else if(subString==suffixReverse){
-				UINT64 orientation=3;
-				UINT64 data = readID | (orientation << 62);
-				readHits->push_back(data);
+			else {
+				string forwardRead = toString(startOffset+1,stringLen);
+				string suffixForward = forwardRead.substr(forwardRead.length() - hashStringLength,hashStringLength);
+				string prefixReverse = reverseComplement(suffixForward);
+				if(subString==suffixForward)
+				{
+					UINT64 orientation=1;
+					UINT64 data = readID | (orientation << 62);
+					readHits->push_back(data);
+				}
+				else if(subString==prefixReverse){
+					UINT64 orientation=2;
+					UINT64 data = readID | (orientation << 62);
+					readHits->push_back(data);
+				}
 			}
+			startOffset+=dataLen+1;
 		}
-		else {
-			string forwardRead = toString(startOffset+1,stringLen);
-			string suffixForward = forwardRead.substr(forwardRead.length() - hashStringLength,hashStringLength);
-			string prefixReverse = reverseComplement(suffixForward);
-			if(subString==suffixForward)
-			{
-				UINT64 orientation=1;
-				UINT64 data = readID | (orientation << 62);
-				readHits->push_back(data);
+	}
+	else
+	{
+		UINT64 hash_block_len = globalEndOffset-globalStartOffset;
+		int rank = getOffsetRank(globalStartOffset);
+		UINT64 localOffset = getLocalOffset(globalStartOffset,rank);
+		UINT64 dataBlock[hash_block_len];
+		MPI_Get(dataBlock, hash_block_len, MPI_UINT64_T, rank, localOffset, hash_block_len, MPI_UINT64_T, win);
+		UINT64 startOffset=0;
+		while(startOffset<hash_block_len)
+		{
+			UINT64 readID = dataBlock[startOffset] & 0X0000FFFFFFFFFFFF;
+			UINT64 orient = dataBlock[startOffset] >> 63;
+			UINT64 stringLen = (dataBlock[startOffset] >> 48) & 0X0000000000007FFF;
+			UINT64 dataLen = (stringLen / 32) + (stringLen % 32 != 0);
+			if(orient==0){
+				string forwardRead = toStringMPI(dataBlock, stringLen, startOffset+1);
+				string prefixForward = forwardRead.substr(0,hashStringLength);
+				string suffixReverse = reverseComplement(prefixForward);
+				if(subString==prefixForward)
+				{
+					UINT64 orientation=0;
+					UINT64 data = readID | (orientation << 62);
+					readHits->push_back(data);
+				}
+				else if(subString==suffixReverse){
+					UINT64 orientation=3;
+					UINT64 data = readID | (orientation << 62);
+					readHits->push_back(data);
+				}
 			}
-			else if(subString==prefixReverse){
-				UINT64 orientation=2;
-				UINT64 data = readID | (orientation << 62);
-				readHits->push_back(data);
+			else {
+				string forwardRead = toStringMPI(dataBlock, stringLen, startOffset+1);
+				string suffixForward = forwardRead.substr(forwardRead.length() - hashStringLength,hashStringLength);
+				string prefixReverse = reverseComplement(suffixForward);
+				if(subString==suffixForward)
+				{
+					UINT64 orientation=1;
+					UINT64 data = readID | (orientation << 62);
+					readHits->push_back(data);
+				}
+				else if(subString==prefixReverse){
+					UINT64 orientation=2;
+					UINT64 data = readID | (orientation << 62);
+					readHits->push_back(data);
+				}
 			}
+			startOffset+=dataLen+1;
 		}
-		startOffset+=dataLen+1;
+
 	}
 	return readHits;	// return the index.
 }
@@ -625,7 +680,7 @@ string HashTable::toString(UINT64 hashDataIndex,UINT64 stringLen) const
  * Convert a set of data bytes from a data block to string
  *
  */
-string HashTable::toStringMPI(UINT64  *hashDataBlock,UINT64 stringLen) const
+string HashTable::toStringMPI(UINT64 *hashDataBlock,UINT64 stringLen, UINT64 startOffset) const
 {
 	string dna_str="";
 	string strArr[] = {"A","C","G","T"};
@@ -634,13 +689,14 @@ string HashTable::toStringMPI(UINT64  *hashDataBlock,UINT64 stringLen) const
 	{
 		uint8_t shift = (32*2-2) - 2*(i % 32);
 		/* get the i-th DNA base */
-		UINT64 base = (hashDataBlock[i/32] & ((UINT64)BASE_MASK << shift)) >> shift;
+		UINT64 base = (hashDataBlock[startOffset + i/32] & ((UINT64)BASE_MASK << shift)) >> shift;
 		dna_str += strArr[base];
 	}
 	return dna_str;
 }
 UINT64 HashTable::getReadLength(UINT64 globalOffset, int myid) const
 {
+	MPI_Win_fence(0, win);
 	if(isGlobalOffsetInRange(globalOffset,myid))
 	{
 		UINT64 localOffset = getLocalOffset(globalOffset,myid);
@@ -648,11 +704,13 @@ UINT64 HashTable::getReadLength(UINT64 globalOffset, int myid) const
 	}
 	else
 	{
-		UINT64 dataRec;
+		UINT64 dataRec[1];
+		dataRec[0]=0;
 		int rank = getOffsetRank(globalOffset);
 		UINT64 localOffset = getLocalOffset(globalOffset,rank);
-	    MPI_Get(&dataRec, 1, MPI_UINT64_T, rank, localOffset, 1, MPI_UINT64_T, win);
-	    return ((dataRec >> 48) & 0X0000000000007FFF); //2nd MSB to 16th MSB are read length
+		int status = MPI_Get(dataRec, 1, MPI_UINT64_T, rank, localOffset, 1, MPI_UINT64_T, win);
+	    cout<<"Status:"<<status<<" Loffset"<<localOffset<<" Len:"<<dataRec[0];
+	    return ((dataRec[0] >> 48) & 0X0000000000007FFF); //2nd MSB to 16th MSB are read length
 	}
 }
 
@@ -670,8 +728,8 @@ string HashTable::getStringForward(UINT64 globalOffset, int myid) const
 		UINT64 localOffset = getLocalOffset(globalOffset,rank);
 		UINT64 dna_word_len = (stringLen / 32) + (stringLen % 32 != 0);
 		UINT64 dataBlock[dna_word_len];
-		MPI_Get(dataBlock, dna_word_len, MPI_UINT64_T, rank, localOffset+1, dna_word_len, MPI_UINT64_T, win);
-		return toStringMPI(dataBlock,stringLen);
+		int status = MPI_Get(dataBlock, dna_word_len, MPI_UINT64_T, rank, localOffset+1, dna_word_len, MPI_UINT64_T, win);
+		return toStringMPI(dataBlock,stringLen,0);
 	}
 }
 

@@ -39,6 +39,7 @@ class OverlapGraph
 		vector<UINT64> meanOfInsertSizes; 							// Mean of insert sizes.
 		vector<UINT64> sdOfInsertSizes; 							// Standard deviation of insert sizes.
 		UINT64 estimatedGenomeSize;									// Estimated genome size. Works for isolated genome. Will not work for Metagenomics.
+		int myProcID;													// Id of the MPI process
 		UINT64 numberOfNodes;										// Number of nodes in the overlap graph.
 		UINT64 numberOfEdges;										// Number of edges in the overlap graph.
 		UINT64 parallelThreadPoolSize;								//No. of OMP threads to spawn
@@ -53,7 +54,7 @@ class OverlapGraph
 	public:
 		bool flowComputed;											// Flag to check wheather the flow is computed or not.
 		OverlapGraph(void);											// Default constructor.
-		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph, string fnamePrefix);								// Another constructor.
+		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph, string fnamePrefix,int myid);								// Another constructor.
 		~OverlapGraph();											// Destructor.
 		bool markTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph); // Mark transitive edges of a read.
 		bool buildOverlapGraphFromHashTable(HashTable *ht, string fnamePrefix);			// Build the overlap graph using hashtable.

@@ -36,10 +36,20 @@ int main(int argc, char **argv)
 	Dataset *dataSet = new Dataset(pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength);
 	HashTable *hashTable=new HashTable(numprocs);
 	hashTable->insertDataset(dataSet, minimumOverlapLength,numprocs, myid);
+	if (myid == 1) { /* use time on master node */
+		for(size_t i=1;i<dataSet->getNumberOfUniqueReads();i++)
+		{
+			UINT64 globalOffset=dataSet->getReadFromID(i)->getReadHashOffset();
+			int rank = hashTable->getOffsetRank(globalOffset);
+			UINT64 localOffset = hashTable->getLocalOffset(globalOffset,rank);
+			cout<<"Read:"<<i<<" GOffset:"<<globalOffset<<" Rank:"<<rank<<" LOffset:"<<localOffset<<endl;
+			cout<<hashTable->getStringForward(globalOffset,1)<<endl;
+		}
+	}
 	//OverlapGraph *overlapGraph;
-	//overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName); //hashTable deleted by this function after building the graph also writes graph
-	delete hashTable;	// Do not need the hash table any more.
-	//delete dataSet;
+	//overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName,myid); //hashTable deleted by this function after building the graph also writes graph
+	delete hashTable;	//  Do not need the hash table any more.
+	delete dataSet;
 	//delete overlapGraph;
 
 	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
