@@ -20,11 +20,34 @@ int main(int argc, char **argv)
 {
 	int numprocs, myid;
 	double start, end;
+
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
 	MPI_Comm_rank(MPI_COMM_WORLD,&myid);
 	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
 	start = MPI_Wtime();
+
+	/*MPI_Win win;
+	int numElements=100;
+	UINT64 hd[numElements];
+	UINT64 hd2[numElements];
+	MPI_Win_create(hd, numElements, sizeof(MPI_INT), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
+	for(int i = 0; i < numElements; i++)
+	{
+		hd[i] = myid;
+		hd2[i]=0;
+	}
+	MPI_Win_fence(0, win);
+
+	if(myid!=2)
+	{
+		MPI_Get(&hd2[0], numElements, MPI_INT, 2, 0, numElements, MPI_INT, win);
+	}
+	else
+		MPI_Get(&hd2[0], numElements, MPI_INT, 0, 0, numElements, MPI_INT, win);
+	MPI_Win_fence(0, win);
+	cout<<"Rank:"<<myid<<" Len:"<<hd2[0]<<endl;*/
+
 
 	UINT64 minimumOverlapLength;
 	vector<string> pairedEndFileNames, singleEndFileNames;
@@ -36,22 +59,11 @@ int main(int argc, char **argv)
 	Dataset *dataSet = new Dataset(pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength);
 	HashTable *hashTable=new HashTable(numprocs);
 	hashTable->insertDataset(dataSet, minimumOverlapLength,numprocs, myid);
-	if (myid == 1) { /* use time on master node */
-		for(size_t i=1;i<dataSet->getNumberOfUniqueReads();i++)
-		{
-			UINT64 globalOffset=dataSet->getReadFromID(i)->getReadHashOffset();
-			int rank = hashTable->getOffsetRank(globalOffset);
-			UINT64 localOffset = hashTable->getLocalOffset(globalOffset,rank);
-			cout<<"Read:"<<i<<" GOffset:"<<globalOffset<<" Rank:"<<rank<<" LOffset:"<<localOffset<<endl;
-			cout<<hashTable->getStringForward(globalOffset,1)<<endl;
-		}
-	}
-	//OverlapGraph *overlapGraph;
-	//overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName,myid); //hashTable deleted by this function after building the graph also writes graph
+	OverlapGraph *overlapGraph;
+	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName,myid); //hashTable deleted by this function after building the graph also writes graph
 	delete hashTable;	//  Do not need the hash table any more.
 	delete dataSet;
-	//delete overlapGraph;
-
+	delete overlapGraph;
 	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
 	end = MPI_Wtime();
 
