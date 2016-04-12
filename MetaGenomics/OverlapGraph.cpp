@@ -121,7 +121,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	flowComputed = false;
 	hashTable = ht;
 	dataSet = ht->getDataset();
-	int threadID = omp_get_thread_num();
 
 	markContainedReads(fnamePrefix);
 
@@ -149,7 +148,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 		}
 		while(startReadID!=0) // Loop till all nodes marked
 		{
-
 			map<UINT64,nodeType> *exploredReads = new map<UINT64,nodeType>;							//Record of nodes processed
 			queue<UINT64> *nodeQ = new queue<UINT64>;												//Queue
 			map<UINT64, vector<Edge*> * > *parGraph = new map<UINT64, vector<Edge*> * >;			//Partial graph
@@ -225,11 +223,13 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					}
 					if(writtenMakedNodes>writeParGraphSize)
 					{
+						int threadID = omp_get_thread_num();
 						saveParGraphToFile(fnamePrefix + "_" + SSTR(threadID) + "_parGraph.txt" , exploredReads, parGraph);
 						writtenMakedNodes=0;
 					}
 				}
 			}
+			int threadID = omp_get_thread_num();
 			saveParGraphToFile(fnamePrefix + "_" + SSTR(threadID) + "_parGraph.txt" , exploredReads, parGraph);
 			for (map<UINT64, vector<Edge*> * >::iterator it=parGraph->begin(); it!=parGraph->end();it++)
 			{
