@@ -165,7 +165,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					UINT64 read1 = nodeQ->front();										//Pop from queue...
 					nodeQ->pop();
 					bool isPrevMarked=false;
-					cout<<"ThreadID "<<threadID<<": QNodes "<<nodeQ->size()<<", Marked Nodes "<<writtenMakedNodes<<endl;
 					#pragma omp critical(assignRandomStart)
 					{
 						if(allMarked->at(read1)==0)
