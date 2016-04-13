@@ -103,7 +103,8 @@ void HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parall
 			rankIndx++;
 		}
 	}
-	memoryReadCount->at(rankIndx-1)=currReadCount;
+	if(rankIndx==parallelProcessPoolSize)
+		memoryReadCount->at(rankIndx-1)=currReadCount;
 	delete hashRecordCounts;
 	//Update empty ranks with max index...
 	for(;rankIndx<memoryHashPartitions->size();rankIndx++)
@@ -355,7 +356,9 @@ void HashTable::setHashTableSize(UINT64 size)
 void HashTable::setHashTableDataSize(int myid)
 {
 	int numElements=memoryDataPartitions->at(myid+1)-memoryDataPartitions->at(myid);
-	hashData = new UINT64[numElements];
+	//hashData = new UINT64[numElements];
+	hashData = NULL;
+	MPI_Alloc_mem(numElements*sizeof(MPI_UINT64_T), MPI_INFO_NULL, (void **)&hashData);
 	MPI_Win_create(hashData, numElements*sizeof(MPI_UINT64_T), sizeof(MPI_UINT64_T), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
  	//MPI_Win_allocate(numElements * sizeof(MPI_UINT64_T), sizeof(MPI_UINT64_T), MPI_INFO_NULL, MPI_COMM_WORLD, hashData, &win);
 	std::memset(hashData, 0, numElements*sizeof(MPI_UINT64_T));
@@ -614,7 +617,7 @@ void HashTable::exchangeLists(int myid)
 void HashTable::setLocalHitList(const string readString, int myid)
 {
 	UINT64 hashQueryCount = readString.length() - getHashStringLength();
-	localReadHits = new vector<UINT64*>(hashQueryCount,NULL);
+	localReadHits = new vector<UINT64*>(hashQueryCount);
 	for(UINT64 j = 0; j < readString.length() - getHashStringLength(); j++) // for each substring of read1 of length getHashStringLength
 	{
 		string subString = readString.substr(j,getHashStringLength()); // Get the substring from read string
@@ -628,14 +631,16 @@ void HashTable::setLocalHitList(const string readString, int myid)
 		{
 			int t_rank = getOffsetRank(globalStartOffset);
 			UINT64 localOffset = getLocalOffset(globalStartOffset,t_rank);
+			//cout<<"oRank:"<<myid<<", tRank:"<<t_rank<<", len:"<<hash_block_len<<", Offset:"<<localOffset<<endl;
 			//Allocate memory
 			localReadHits->at(j) = new UINT64[hash_block_len];
 			std::memset(localReadHits->at(j), 0, hash_block_len*sizeof(MPI_UINT64_T));
 			// Get data from RMA
+			MPI_Win_lock(MPI_LOCK_SHARED, t_rank, 0, win);
 			MPI_Get(localReadHits->at(j), hash_block_len, MPI_UINT64_T, t_rank, localOffset, hash_block_len, MPI_UINT64_T, win);
+			MPI_Win_unlock(t_rank, win);
 		}
 	}
-	MPI_Win_fence(0, win);
 }
 /**********************************************************************************************************************
 	Get  a list of read containing the subString as prefix or suffix.
@@ -658,8 +663,9 @@ map<UINT64,string> HashTable::getLocalHitList(string subString, UINT64 subString
 			UINT64 orient = dataBlock[startOffset] >> 63;
 			UINT64 stringLen = (dataBlock[startOffset] >> 48) & 0X0000000000007FFF;
 			UINT64 dataLen = (stringLen / 32) + (stringLen % 32 != 0);
+			string forwardRead = toStringMPI(dataBlock, stringLen, startOffset+1);
+			//cout<<"rid:"<<readID<<", ori:"<<orient<<", len:"<<stringLen<<", Read:"<<forwardRead<<endl;
 			if(orient==0){
-				string forwardRead = toStringMPI(dataBlock, stringLen, startOffset+1);
 				string prefixForward = forwardRead.substr(0,hashStringLength);
 				string suffixReverse = reverseComplement(prefixForward);
 				if(subString==prefixForward)
@@ -675,7 +681,6 @@ map<UINT64,string> HashTable::getLocalHitList(string subString, UINT64 subString
 				}
 			}
 			else {
-				string forwardRead = toStringMPI(dataBlock, stringLen, startOffset+1);
 				string suffixForward = forwardRead.substr(forwardRead.length() - hashStringLength,hashStringLength);
 				string prefixReverse = reverseComplement(suffixForward);
 				if(subString==suffixForward)
@@ -748,8 +753,8 @@ HashTable::~HashTable(void)
 	delete memoryHashPartitions;
 	delete memoryDataPartitions;
 	MPI_Win_free(&win);
-	//MPI_Free_mem(hashData);
-	delete hashData;
+	MPI_Free_mem(hashData);
+	//delete hashData;
 }
 
 /*

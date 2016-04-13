@@ -41,6 +41,7 @@ int main(int argc, char **argv)
 	hashTable->insertDataset(dataSet, minimumOverlapLength,numprocs, myid);
 	OverlapGraph *overlapGraph;
 	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName,myid,MPI_BLOCK,numprocs); //hashTable deleted by this function after building the graph also writes graph
+	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
 	delete hashTable;	//  Do not need the hash table any more.
 	delete dataSet;
 	delete overlapGraph;
