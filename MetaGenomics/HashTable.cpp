@@ -853,8 +853,9 @@ UINT64 HashTable::getReadLength(UINT64 globalOffset, int myid) const
 	dataRec=0;
 	int rank = getOffsetRank(globalOffset);
 	UINT64 localOffset = getLocalOffset(globalOffset,rank);
+	MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
 	MPI_Get(&dataRec, 1, MPI_UINT64_T, rank, localOffset, 1, MPI_UINT64_T, win);
-	MPI_Win_fence(0, win);
+	MPI_Win_unlock(rank, win);
 	return ((dataRec >> 48) & 0X0000000000007FFF); 	//2nd MSB to 16th MSB are read length
 	return 0;
 }
