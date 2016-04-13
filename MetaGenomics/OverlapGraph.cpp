@@ -74,7 +74,7 @@ OverlapGraph::OverlapGraph(void)
 BNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMM
 
 UYTREWQ**********************************************************************************************************************/
-OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph, string fnamePrefix, int myid)
+OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph, string fnamePrefix, int myid, int MPINodeBlockSize, int numprocs)
 {
 	// Initialize the variables.
 	estimatedGenomeSize = 0;
@@ -84,7 +84,7 @@ OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph, 
 	parallelThreadPoolSize=maxThreads;
 	writeParGraphSize=maxParGraph;
 	myProcID=myid;
-	buildOverlapGraphFromHashTable(ht,fnamePrefix);
+	buildOverlapGraphFromHashTable(ht,fnamePrefix,MPINodeBlockSize,numprocs);
 }
 
 /**********************************************************************************************************************
@@ -111,11 +111,11 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	dataSet = ht->getDataset();
 
 	markContainedReads(fnamePrefix);
-
+	return true;
 	if(myProcID==0)
 	{
 		UINT64 nextBlockBegin=1;
-		while(nextBlockBegin<=dataSet->getNumberOfUniqueReads)
+		while(nextBlockBegin<=dataSet->getNumberOfUniqueReads())
 		{
 			int number;
 			MPI_Status status;
@@ -126,7 +126,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			// send reply back to sender of the message received above
 			for (int i = 1; i < numprocs; i++) {
 				UINT64 nextReadID=0;
-				if(nextBlockBegin<=dataSet->getNumberOfUniqueReads)
+				if(nextBlockBegin<=dataSet->getNumberOfUniqueReads())
 				{
 					nextReadID=nextBlockBegin;
 					nextBlockBegin+=MPINodeBlockSize;
@@ -142,23 +142,39 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	}
 	else
 	{
+		while(1)
+		{
+			//Get reads to process
+
+			//Global communicate 1
+
+			//Global communicate 3
+
+			//Sync all processes
+		}
 		UINT64 startReadID=0;
 		MPI_Send(&startReadID, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD);
 		MPI_Recv(&startReadID, 1, MPI_INT, 0, MPI_ANY_TAG, MPI_COMM_WORLD,MPI_STATUS_IGNORE);
 		while(startReadID!=0) // Loop till all nodes marked
 		{
-			for(UINT64 i=startReadID;i<startReadID+MPINodeBlockSize;i++)
+			UINT64 endReadID=(startReadID+MPINodeBlockSize-1)<dataSet->getNumberOfUniqueReads()?(startReadID+MPINodeBlockSize-1):dataSet->getNumberOfUniqueReads();
+			/*Start global communication epoch*/
+			vector<UINT64*> * reads = hashTable->getReads(startReadID,endReadID,myProcID);
+			/*End global communication epoch*/
+
+			for(UINT64 i=startReadID;i<(startReadID+MPINodeBlockSize) && i<=dataSet->getNumberOfUniqueReads();i++)
 			{
-				/*Start global communication epoch*/
+
+				bool epocGetFlag=true;
 				if(epocGetFlag)
 				{
-					hashTable->setLocalHitList(read1String,myProcID); // Search the substring in the hash table
+					//hashTable->setLocalHitList(read1String,myProcID); // Search the substring in the hash table
 				}
 				else
 				{
 					hashTable->endEpoch();
 				}
-				/*End global communication epoch*/
+
 			}
 
 			MPI_Request request;
@@ -325,7 +341,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 	if(filePointer == NULL)
 		MYEXIT("Unable to open file: +"+fnamePrefix+"_containedReads.txt");
 
-	int nextlocalReadOffset=0;
+	UINT64 nextlocalReadOffset=0;
 	for(UINT64 i = 0; i < hashTable->getMaxMemoryReadCount(); i++) // For each read
 	{
 		bool epocGetFlag=true;
@@ -333,7 +349,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 		string read1String="";
 		Read *read1;
 		UINT64 read1Len;
-		if(i>=hashTable->getMemoryReadCount(myProcID))
+		if(i>=hashTable->getMemoryReadCount(myProcID) || nextlocalReadOffset>=hashTable->getMemoryMaxLocalOffset(myProcID))
 		{
 			epocGetFlag=false;
 		}
@@ -341,13 +357,9 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 		{
 			read1ID = hashTable->getLocalReadID(nextlocalReadOffset,myProcID); // Get the read
 			read1 = dataSet->getReadFromID(read1ID);
-			read1Len = hashTable->getLocalReadLength(nextlocalReadOffset,myProcID);
+			read1Len=hashTable->getLocalReadLength(nextlocalReadOffset,myProcID);
 			read1String = hashTable->getLocalStringForward(nextlocalReadOffset,myProcID); // Get the forward of the read
 			nextlocalReadOffset = hashTable->getLocalNextOffset(nextlocalReadOffset,myProcID); // Get the next read
-			/*if(myProcID==0)
-			{
-				cout<<"Rank: "<<myProcID<<" Read:"<<read1ID<<" Seq:"<<readString<<" Len:"<<read1Len<<"Offsets:"<<nextlocalReadOffset<<"Orient:"<<read1Orient<<endl;
-			}*/
 			if(read1->superReadID!=0)		//If read is already marked as contained, there is no need to look for contained reads within it
 			{
 				epocGetFlag=false;
@@ -367,7 +379,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 		{
 			string subString;
 			#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
-			for(UINT64 j = 0; j < read1Len - hashTable->getHashStringLength(); j++) // fGr each substring of read1 of length getHashStringLength
+			for(UINT64 j = 0; j < read1String.length() - hashTable->getHashStringLength(); j++) // fGr each substring of read1 of length getHashStringLength
 			{
 				subString = read1String.substr(j,hashTable->getHashStringLength()); // Get the substring from read1
 				map<UINT64,string> listOfReads = hashTable->getLocalHitList(subString, j);
@@ -402,8 +414,6 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 								#pragma omp critical(updateSuperRead)
 								{
 									if(read2->superReadID == 0) // This is the first super read found. we store the ID of the super read.
-											read2->superReadID = i;
-									else if(read1String.length() > hashTable->getReadLength(dataSet->getReadFromID(read2->superReadID)->getReadHashOffset(),myProcID)) // This super read is longer than the previous super read. Update the super read ID.
 											read2->superReadID = i;
 									//Write contained read information regardless as it is a super read has been identified
 									filePointer<<read2->getFileIndex()<<"\t"<<read1->getFileIndex()<<"\t"<<orientation<<","
@@ -452,7 +462,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 						}
 					}
 				}
-			}//End of inner for
+			}//End of inner for*/
 			hashTable->deleteLocalHitList();
 		}
 	}

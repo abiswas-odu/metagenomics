@@ -54,10 +54,10 @@ class OverlapGraph
 	public:
 		bool flowComputed;											// Flag to check wheather the flow is computed or not.
 		OverlapGraph(void);											// Default constructor.
-		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph, string fnamePrefix,int myid);								// Another constructor.
+		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph, string fnamePrefix,int myid, int MPINodeBlockSize, int numprocs);								// Another constructor.
 		~OverlapGraph();											// Destructor.
 		bool markTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph); // Mark transitive edges of a read.
-		bool buildOverlapGraphFromHashTable(HashTable *ht, string fnamePrefix);			// Build the overlap graph using hashtable.
+		bool buildOverlapGraphFromHashTable(HashTable *ht, string fnamePrefix, int MPINodeBlockSize, int numprocs);			// Build the overlap graph using hashtable.
 		bool insertEdge(Edge * edge, map<UINT64, vector<Edge*> * > *parGraph); 								// Insert an edge in the partial overlap graph.
 		bool insertEdge(Read *read1, Read *read2,  UINT8 orient, UINT16 overlapOffset, map<UINT64, vector<Edge*> * > *parGraph); // Insert an edge in the overlap graph.
 
@@ -69,7 +69,7 @@ class OverlapGraph
 		bool insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> * exploredReads, map<UINT64, vector<Edge*> * > *parGraph);	// Insert into the overlap graph all edges of a read.
 		bool removeTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph);				// Remove all transitive edges from the overlap graph incident to a given read.
 		bool saveParGraphToFile(string fileName, map<UINT64,nodeType> * exploredReads, map<UINT64, vector<Edge*> * > *parGraph);   //Save partial graph to file and reduce memory footprint
-		void markContainedReads(string fnamePrefix);								// Find superReads for each read and mark them as contained read.
+		void markContainedReads(string fnamePrefix);									// Find superReads for each read and mark them as contained read.
 };
 
 

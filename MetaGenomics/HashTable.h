@@ -73,15 +73,18 @@ class HashTable{
 		bool isGlobalOffsetInRange(UINT64 globalOffset, int myid) const;
 		int getOffsetRank(UINT64 globalOffset) const;
 		string toStringMPI(UINT64  *hashDataBlock,UINT64 stringLen,  UINT64 startOffset) const;
-		void printStuff(int myid);
 		UINT64 getMemoryReadCount(int myid);
 		UINT64 getMaxMemoryReadCount();
+		UINT64 getMemoryMaxLocalOffset(int rank);
 		void endEpoch();
 		UINT64 getLocalReadID(UINT64 localOffset, int myid) const;
 		UINT64 getLocalReadLength(UINT64 localOffset, int myid) const;
 		string getLocalStringForward(UINT64 localOffset, int myid) const;
 		UINT64 getLocalNextOffset(UINT64 localOffset, int myid) const;
 		UINT64 getLocalReadOrient(UINT64 localOffset, int myid) const;
+		vector<UINT64*> * getReads(UINT64 startID, UINT64 endID, int myid);
+
+		void exchangeLists(int myid);
 };
 
 

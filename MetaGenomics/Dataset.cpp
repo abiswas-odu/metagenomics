@@ -237,6 +237,23 @@ Read * Dataset::getReadFromID(UINT64 ID)
 
 
 /**********************************************************************************************************************
+	This function returns read length of an read
+**********************************************************************************************************************/
+UINT64 Dataset::getReadLength(UINT64 ID)
+{
+	if(ID < 1 || ID > numberOfUniqueReads)	// ID outside the range.
+	{
+		stringstream ss;
+		ss << "ID " << ID << " out of bound.";
+		string s = ss.str();
+		MYEXIT(s);
+	}
+	return reads->at(ID - 1)->getReadLength();
+}
+
+
+
+/**********************************************************************************************************************
 	Default destructor
 **********************************************************************************************************************/
 Dataset::~Dataset(void)

@@ -18,37 +18,17 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 
 int main(int argc, char **argv)
 {
-	int numprocs, myid;
+	int numprocs, myid, len;
 	double start, end;
+	char name[MPI_MAX_PROCESSOR_NAME];
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
 	MPI_Comm_rank(MPI_COMM_WORLD,&myid);
 	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
+	MPI_Get_processor_name(name, &len);
 	start = MPI_Wtime();
-
-	/*MPI_Win win;
-	int numElements=100;
-	UINT64 hd[numElements];
-	UINT64 hd2[numElements];
-	MPI_Win_create(hd, numElements, sizeof(MPI_INT), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
-	for(int i = 0; i < numElements; i++)
-	{
-		hd[i] = myid;
-		hd2[i]=0;
-	}
-	MPI_Win_fence(0, win);
-
-	if(myid!=2)
-	{
-		MPI_Get(&hd2[0], numElements, MPI_INT, 2, 0, numElements, MPI_INT, win);
-	}
-	else
-		MPI_Get(&hd2[0], numElements, MPI_INT, 0, 0, numElements, MPI_INT, win);
-	MPI_Win_fence(0, win);
-	cout<<"Rank:"<<myid<<" Len:"<<hd2[0]<<endl;*/
-
-
+	printf("Rank %d running on %s\n", myid, name);
 	UINT64 minimumOverlapLength;
 	vector<string> pairedEndFileNames, singleEndFileNames;
 	string allFileName;
@@ -60,7 +40,7 @@ int main(int argc, char **argv)
 	HashTable *hashTable=new HashTable(numprocs);
 	hashTable->insertDataset(dataSet, minimumOverlapLength,numprocs, myid);
 	OverlapGraph *overlapGraph;
-	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName,myid); //hashTable deleted by this function after building the graph also writes graph
+	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName,myid,MPI_BLOCK,numprocs); //hashTable deleted by this function after building the graph also writes graph
 	delete hashTable;	//  Do not need the hash table any more.
 	delete dataSet;
 	delete overlapGraph;

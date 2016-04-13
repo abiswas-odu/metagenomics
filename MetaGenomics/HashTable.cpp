@@ -532,6 +532,80 @@ int HashTable::getOffsetRank(UINT64 globalOffset) const
 	return rank;
 }
 
+/**********************************************************************************************************************
+	Populate a list of read containing the subString as prefix or suffix.
+**********************************************************************************************************************/
+vector<UINT64*> * HashTable::getReads(UINT64 startID, UINT64 endID, int myid)
+{
+	UINT64 readCount = endID - startID;
+	vector<UINT64*> *localReads = new vector<UINT64*>(readCount,NULL);
+	for(UINT64 j = 0; j < readCount; j++) // for each substring of read1 of length getHashStringLength
+	{
+		UINT64 stringLen=dataSet->getReadLength(j);
+		UINT64 globalOffset=dataSet->getReadFromID(j)->getReadHashOffset();
+		int rank = getOffsetRank(globalOffset);
+		INT64 localOffset = getLocalOffset(globalOffset,rank);
+		UINT64 dna_word_len = (stringLen / 32) + (stringLen % 32 != 0);
+		localReadHits->at(j) = new UINT64[dna_word_len+1];
+		MPI_Get(localReadHits->at(j), dna_word_len+1, MPI_UINT64_T, rank, localOffset, dna_word_len+1, MPI_UINT64_T, win);
+	}
+	MPI_Win_fence(0, win);
+	return localReads;
+}
+
+/**********************************************************************************************************************
+	Populate a list of read containing the subString as prefix or suffix.
+**********************************************************************************************************************/
+void HashTable::exchangeLists(int myid)
+{
+	if(myid==0)
+	{
+		UINT64 numElements=memoryDataPartitions->at(2)-memoryDataPartitions->at(1);
+		UINT64 *dataBlock = new UINT64[numElements];
+		std::memset(dataBlock, 0, numElements*sizeof(MPI_UINT64_T));
+		for(int i=0;i<numElements;i++)
+			MPI_Get(dataBlock+i, numElements, MPI_UINT64_T, 1, i, 1, MPI_UINT64_T, win);
+		MPI_Win_fence(0, win);
+		UINT64 startOffset=0;
+		while(startOffset<numElements)
+		{
+			UINT64 readID = dataBlock[startOffset] & 0X0000FFFFFFFFFFFF;
+			UINT64 orient = dataBlock[startOffset] >> 63;
+			UINT64 stringLen = (dataBlock[startOffset] >> 48) & 0X0000000000007FFF;
+			UINT64 dataLen = (stringLen / 32) + (stringLen % 32 != 0);
+			string forwardRead = toStringMPI(dataBlock, stringLen, startOffset+1);
+			cout<<"oRank:"<<myid<<", tRank:"<<1<<", ReadID:"<<readID<<", O:"<<orient<<", len:"<<stringLen<<", Read:"<<forwardRead<<endl;
+			startOffset+=dataLen+1;
+		}
+	}
+	if(myid==1)
+	{
+		int numElements=memoryDataPartitions->at(3)-memoryDataPartitions->at(2);
+		UINT64 *dataBlock = new UINT64[numElements];
+		std::memset(dataBlock, 0, numElements*sizeof(MPI_UINT64_T));
+		MPI_Get(dataBlock, numElements, MPI_UINT64_T, 2, 0, numElements, MPI_UINT64_T, win);
+		MPI_Win_fence(0, win);
+		UINT64 startOffset=0;
+		while(startOffset<numElements)
+		{
+			UINT64 readID = dataBlock[startOffset] & 0X0000FFFFFFFFFFFF;
+			UINT64 orient = dataBlock[startOffset] >> 63;
+			UINT64 stringLen = (dataBlock[startOffset] >> 48) & 0X0000000000007FFF;
+			UINT64 dataLen = (stringLen / 32) + (stringLen % 32 != 0);
+			string forwardRead = toStringMPI(dataBlock, stringLen, startOffset+1);
+			cout<<"oRank:"<<myid<<", tRank:"<<2<<", ReadID:"<<readID<<", O:"<<orient<<", len:"<<stringLen<<", Read:"<<forwardRead<<endl;
+			startOffset+=dataLen+1;
+		}
+	}
+	if(myid==2)
+	{
+		int numElements=memoryDataPartitions->at(1)-memoryDataPartitions->at(0);
+		UINT64 *localhashData = new UINT64[numElements];
+		std::memset(localhashData, 0, numElements*sizeof(MPI_UINT64_T));
+		MPI_Get(localhashData, numElements, MPI_UINT64_T, 0, 0, numElements, MPI_UINT64_T, win);
+		MPI_Win_fence(0, win);
+	}
+}
 
 
 /**********************************************************************************************************************
@@ -549,37 +623,37 @@ void HashTable::setLocalHitList(const string readString, int myid)
 		UINT64 globalStartOffset=hashTable[index];
 		UINT64 globalEndOffset= (index==hashTableSize-1)?hashDataTableSize:hashTable[index+1];
 		UINT64 hash_block_len = globalEndOffset-globalStartOffset;
+		localReadHits->at(j)=NULL;
 		if(hash_block_len)
 		{
 			int t_rank = getOffsetRank(globalStartOffset);
 			UINT64 localOffset = getLocalOffset(globalStartOffset,t_rank);
 			//Allocate memory
 			localReadHits->at(j) = new UINT64[hash_block_len];
+			std::memset(localReadHits->at(j), 0, hash_block_len*sizeof(MPI_UINT64_T));
 			// Get data from RMA
 			MPI_Get(localReadHits->at(j), hash_block_len, MPI_UINT64_T, t_rank, localOffset, hash_block_len, MPI_UINT64_T, win);
 		}
 	}
 	MPI_Win_fence(0, win);
 }
-
 /**********************************************************************************************************************
 	Get  a list of read containing the subString as prefix or suffix.
 **********************************************************************************************************************/
 map<UINT64,string> HashTable::getLocalHitList(string subString, UINT64 subStringIndx) const
 {
 	map<UINT64,string> retMap;
-	if(localReadHits->at(subStringIndx)!=NULL)
+	UINT64 *dataBlock=localReadHits->at(subStringIndx);
+	if(dataBlock)
 	{
 		UINT64 index = getHashIndex(subString);	// Get the index using the hash function.
 		//Compute various indices
 		UINT64 globalStartOffset=hashTable[index];
 		UINT64 globalEndOffset= (index==hashTableSize-1)?hashDataTableSize:hashTable[index+1];
 		UINT64 hash_block_len = globalEndOffset-globalStartOffset;
-		int startOffset=0;
-		UINT64 *dataBlock=localReadHits->at(subStringIndx);
+		UINT64 startOffset=0;
 		while(startOffset<hash_block_len)
 		{
-
 			UINT64 readID = dataBlock[startOffset] & 0X0000FFFFFFFFFFFF;
 			UINT64 orient = dataBlock[startOffset] >> 63;
 			UINT64 stringLen = (dataBlock[startOffset] >> 48) & 0X0000000000007FFF;
@@ -618,7 +692,6 @@ map<UINT64,string> HashTable::getLocalHitList(string subString, UINT64 subString
 			}
 			startOffset+=dataLen+1;
 		}
-
 	}
 	return retMap;
 }
@@ -627,12 +700,14 @@ void HashTable::deleteLocalHitList()
 {
 	for(size_t i=0;i<localReadHits->size();i++)
 	{
-		delete localReadHits->at(i);
+		if(localReadHits->at(i))
+			delete localReadHits->at(i);
 	}
 	delete localReadHits;
 	localReadHits=NULL;
 
 }
+
 /**********************************************************************************************************************
 	Get the read counts for a given process...
 **********************************************************************************************************************/
@@ -648,6 +723,13 @@ UINT64 HashTable::getMaxMemoryReadCount()
 {
 	return *max_element(memoryReadCount->begin(),memoryReadCount->end());
 
+}
+/**********************************************************************************************************************
+	Get the max offset for this rank
+**********************************************************************************************************************/
+UINT64 HashTable::getMemoryMaxLocalOffset(int rank)
+{
+	return (memoryDataPartitions->at(rank+1)-memoryDataPartitions->at(rank));
 }
 /**********************************************************************************************************************
 	Fence and end a epoch...
@@ -789,17 +871,7 @@ string HashTable::getStringReverse(UINT64 globalOffset, int myid) const
 {
 	return reverseComplement(getStringForward(globalOffset,myid));
 }
-void HashTable::printStuff(int myid)
-{
-	UINT64 globalOffset=dataSet->getReadFromID(1)->getReadHashOffset();
-	int rank = getOffsetRank(globalOffset);
-	UINT64 localOffset = getLocalOffset(globalOffset,rank);
-	cout<<"Read:"<<1<<" GOffset:"<<globalOffset<<" Rank:"<<rank<<" LOffset:"<<localOffset<<endl;
 
-	MPI_Group comm_group, group;
-
-	cout<<"Rank:"<<myid<<" Len:"<<getReadLength(globalOffset,myid)<<"  "<<getStringForward(globalOffset,myid)<<endl;
-}
 
 
 
