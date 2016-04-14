@@ -36,7 +36,6 @@ class HashTable{
 		UINT64 hashDataTableSize; 					// Ted: Size of the hash data table. This is based on the number of reads.
 		UINT64 *hashTable; 							// AB: List of hash offset of each hash key location
 		UINT64 *hashData; 							// AB: List of hash keys of read number (ID) and orientation.
-		vector<UINT64*> *localReadHits;				//AB: store data locally
 		UINT16 hashStringLength;					// Ted: Length of prefix and suffix of the reads to hash. This is equal to the minumum overlap length.
 		mutable UINT64 numberOfHashCollision;		// Counter to count the number of hash collisions. For debugging only.
 													// It's mutable such that it can be modified in the const member function, getListOfReads
@@ -51,9 +50,9 @@ class HashTable{
 		~HashTable();								// Destructor.
 		void createOffsetTable();
 		void insertDataset(Dataset *d, UINT64 minOverlapLength,UINT64 parallelThreadPoolSize,int myid);	// Insert the dataset in the hash table.
-		void setLocalHitList(const string readString, int myid); 			// Get the list of reads that contain subString as prefix or suffix.
-		void deleteLocalHitList();
-		map<UINT64,string> getLocalHitList(string subString, UINT64 subStringIndx) const;
+		vector<UINT64*> * setLocalHitList(const string readString, int myid); 			// Get the list of reads that contain subString as prefix or suffix.
+		void deleteLocalHitList(vector<UINT64*> *localReadHits);
+		map<UINT64,string> getLocalHitList(vector<UINT64*> *localReadHits, string subString, UINT64 subStringIndx) const;
 		UINT64 hashFunction(const string & subString) const; 						// Hash function.
 		UINT64 getHashTableSize(void) const {return hashTableSize;}		// Get the size of the hash table.
 		UINT64 getHashStringLength() const {return hashStringLength;}		// Get the hash string length.
@@ -84,7 +83,8 @@ class HashTable{
 		UINT64 getLocalReadOrient(UINT64 localOffset, int myid) const;
 		vector<UINT64*> * getReads(UINT64 startID, UINT64 endID, int myid);
 
-		void exchangeLists(int myid);
+		bool needsProcessing(UINT64 read1ID, string readString, int myid); 		// determine is the read mist be processed by this process or not return true of false
+
 };
 
 

@@ -16,7 +16,9 @@
 class Edge{
 	private:
 		Read *source; 							// Source read u
+		UINT16 srcLen;
 		Read *destination; 						// Destination read v
+		UINT16 destLen;
 		UINT8 overlapOrientation;				// Orientation of overlap
 												// 0 = u<-----------<v
 												// 1 = u<----------->v
@@ -35,11 +37,9 @@ class Edge{
 	public:
 		bool transitiveRemovalFlag;							// Used to mark transitive edges.
 		Edge(void);								// Default constructor.
-		Edge(Read *from, Read *to, UINT64 orient, UINT64 length); 	// Another constructor.
-		Edge(Read *from, Read *to, UINT64 orient, UINT64 length, vector<UINT64> *listReads, vector<UINT16> *listOverlapOffsets, vector<UINT8> * listOrientations);
+		Edge(Read *from,UINT16 fromLen, Read *to, UINT16 toLen, UINT64 orient, UINT64 length); 	// Another constructor.
 		~Edge();								// Destructor.
-		bool makeEdge(Read *from, Read *to, UINT64 orient, UINT64 length);
-		bool makeEdge(Read *from, Read *to, UINT64 orient, UINT64 length,  vector<UINT64> *listReads, vector<UINT16> *listOverlapOffsets, vector<UINT8> * listOrientations);
+		bool makeEdge(Read *from,UINT16 fromLen, Read *to,UINT16 toLen, UINT64 orient, UINT64 length);
 		string getStringInEdge(void); 			// return the string in the edge
 		bool setReverseEdge(Edge * edge);		// Set the pointer to the reverse edge.
 		Read * getSourceRead() {return source;}	// Get the read object of the source node.
@@ -47,6 +47,12 @@ class Edge{
 		UINT8 getOrientation() {return overlapOrientation;}	// Return the orientation of the edge.
 		UINT64 getOverlapOffset() {return overlapOffset;}	// Return the overlap offset.
 		Edge * getReverseEdge() const {return reverseEdge;}	// Return the pointer to the reverse edge.
+
+		void setSrcLen(UINT16 len) {srcLen=len;};
+		void setDestLen(UINT16 len) {destLen=len;};
+
+		UINT16 getSrcLen() { return srcLen;};
+		UINT16 getDestLen() { return destLen;};
 };
 
 #endif /* EDGE_H_ */

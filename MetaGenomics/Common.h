@@ -35,7 +35,8 @@
 #include <functional>
 #include <mpi.h>
 #include <bitset>
-
+#include <stdexcept>
+#include <stdint.h>
 using namespace std;
 
 typedef unsigned char UINT8;
