@@ -62,7 +62,6 @@ class HashTable{
 		string getStringForward(UINT64 globalOffset, int myid) const; 			// Get the forward string of the read at offset.
 		string getStringReverse(UINT64 globalOffset, int myid) const;  			// Get the reverse string of the read at offset.
 
-
 		void readReadLengthsFromFile(string fileName, UINT64 minOverlap,UINT64 *hashRecordCounts);
 		void populateReadLengths(UINT64 *hashRecordCounts);												//Populate the read lengths in the hash table for future offset calculation
 		void populateReadData(int myid);												//Populate the read sequence in the hash data
@@ -85,6 +84,9 @@ class HashTable{
 		vector<UINT64*> * getReads(UINT64 startID, UINT64 endID, int myid);
 
 		bool needsProcessing(UINT64 read1ID, string readString, int myid); 		// determine is the read mist be processed by this process or not return true of false
+
+		void setLockAll(){ MPI_Win_lock_all(0, win); }
+		void unLockAll(){ MPI_Win_unlock_all(win); }
 
 };
 

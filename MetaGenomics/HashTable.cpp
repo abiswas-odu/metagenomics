@@ -562,9 +562,10 @@ vector<UINT64*> * HashTable::setLocalHitList(const string readString, int myid)
 				localReadHits->at(j) = new UINT64[hash_block_len];
 				std::memset(localReadHits->at(j), 0, hash_block_len*sizeof(MPI_UINT64_T));
 				// Get data from RMA
-				MPI_Win_lock(MPI_LOCK_SHARED, t_rank, 0, win);
+				//MPI_Win_lock(MPI_LOCK_SHARED, t_rank, 0, win);
 				MPI_Get(localReadHits->at(j), hash_block_len, MPI_UINT64_T, t_rank, localOffset, hash_block_len, MPI_UINT64_T, win);
-				MPI_Win_unlock(t_rank, win);
+				MPI_Win_flush(t_rank,win);
+				//MPI_Win_unlock(t_rank, win);
 			}
 		}
 	}
@@ -779,11 +780,12 @@ UINT64 HashTable::getReadLength(UINT64 globalOffset, int myid) const
 {
 	UINT64 dataRec;
 	dataRec=0;
-	int rank = getOffsetRank(globalOffset);
-	UINT64 localOffset = getLocalOffset(globalOffset,rank);
-	MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
-	MPI_Get(&dataRec, 1, MPI_UINT64_T, rank, localOffset, 1, MPI_UINT64_T, win);
-	MPI_Win_unlock(rank, win);
+	int t_rank = getOffsetRank(globalOffset);
+	UINT64 localOffset = getLocalOffset(globalOffset,t_rank);
+	//MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
+	MPI_Get(&dataRec, 1, MPI_UINT64_T, t_rank, localOffset, 1, MPI_UINT64_T, win);
+	MPI_Win_flush(t_rank,win);
+	//MPI_Win_unlock(rank, win);
 	return ((dataRec >> 48) & 0X0000000000007FFF); 	//2nd MSB to 16th MSB are read length
 	return 0;
 }
@@ -795,13 +797,15 @@ string HashTable::getStringForward(UINT64 globalOffset, int myid) const
 	#pragma omp critical(getRemoteData)
 	{
 		UINT64 stringLen=getReadLength(globalOffset, myid);
-		int rank = getOffsetRank(globalOffset);
-		INT64 localOffset = getLocalOffset(globalOffset,rank);
+		int t_rank = getOffsetRank(globalOffset);
+		INT64 localOffset = getLocalOffset(globalOffset,t_rank);
 		UINT64 dna_word_len = (stringLen / 32) + (stringLen % 32 != 0);
 		dataBlock = new UINT64[dna_word_len];
-		MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
-		MPI_Get(dataBlock, dna_word_len, MPI_UINT64_T, rank, localOffset+1, dna_word_len, MPI_UINT64_T, win);
-		MPI_Win_unlock(rank, win);
+
+		//MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
+		MPI_Get(dataBlock, dna_word_len, MPI_UINT64_T, t_rank, localOffset+1, dna_word_len, MPI_UINT64_T, win);
+		MPI_Win_flush(t_rank,win);
+		//MPI_Win_unlock(rank, win);
 		seq = toStringMPI(dataBlock,stringLen,0);
 	}
 	delete dataBlock;

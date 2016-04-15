@@ -109,7 +109,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	dataSet = ht->getDataset();
 
 	markContainedReads(fnamePrefix, numprocs);
-
 	/*create sync window in master*/
 	MPI_Win winMark=NULL;
 	int *allMarked=NULL;
@@ -119,7 +118,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 
 		MPI_Alloc_mem(numElements*sizeof(MPI_INT), MPI_INFO_NULL, (void **)&allMarked);
 		MPI_Win_create(allMarked, numElements*sizeof(MPI_INT), sizeof(MPI_INT), MPI_INFO_NULL, MPI_COMM_WORLD, &winMark);
-		std::memset(allMarked, 0, numElements*sizeof(MPI_UINT64_T));
+		std::memset(allMarked, 0, numElements*sizeof(MPI_INT));
 		for(int i=0;i<numprocs;i++)
 			allMarked[i]=1;
 	}
@@ -128,11 +127,14 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 		MPI_Win_create(MPI_BOTTOM,0,sizeof(MPI_INT),MPI_INFO_NULL, MPI_COMM_WORLD, &winMark);
 	}
 	MPI_Win_fence(0, winMark);
+	hashTable->setLockAll();
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
 		int threadID = omp_get_thread_num();
 		UINT64 startReadID=(myProcID*parallelThreadPoolSize)+threadID+1;
-		UINT64 prevReadID=startReadID;
+		int *myMarked=new int[numElements];								//List of reads already marked locally or lazy globally
+		std::memset(myMarked, 0, numElements*sizeof(int));
+		myMarked[startReadID-1]=1;
 		while(startReadID!=0) // Loop till all nodes marked
 		{
 			map<UINT64,nodeType> *exploredReads = new map<UINT64,nodeType>;							//Record of nodes processed
@@ -150,22 +152,9 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					UINT64 read1 = nodeQ->front();										//Pop from queue...
 					//cout<<"Proc:"<<myProcID<<" srarting from "<<read1<<endl;
 					nodeQ->pop();
-					int isPrevMarked=1;
-					#pragma omp critical(getRemoteData)
+					if(myMarked[read1-1]==0 || read1==startReadID)
 					{
-						MPI_Win_lock(MPI_LOCK_SHARED, 0, 0, winMark);
-						MPI_Get(&isPrevMarked, 1, MPI_INT, 0, read1-1, 1, MPI_INT, winMark);
-						MPI_Win_unlock(0, winMark);
-					}
-					if(!isPrevMarked || read1==startReadID)
-					{
-						isPrevMarked=1;
-						#pragma omp critical(getRemoteData)
-						{
-							MPI_Win_lock(MPI_LOCK_SHARED, 0, 0, winMark);
-							MPI_Put(&isPrevMarked, 1, MPI_INT, 0, read1-1, 1, MPI_INT, winMark);
-							MPI_Win_unlock(0, winMark);
-						}
+						myMarked[read1-1]=1;									//Mark this as being processed by this thread
 						if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
 						{
 							insertAllEdgesOfRead(read1, exploredReads, parGraph);					// Explore current node.
@@ -235,32 +224,41 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			delete parGraph;
 			delete exploredReads;
 			delete nodeQ;
-			startReadID=0;
+			// Update my and global marked window...
 			/*Get remaining global window...*/
 			#pragma omp critical(getRemoteData)
 			{
-				int remainCount = numElements-prevReadID;
-				int *remainingToMark=new int[remainCount];
-				MPI_Win_lock(MPI_LOCK_SHARED, 0, 0, winMark);
-				MPI_Get(remainingToMark, remainCount, MPI_INT, 0, prevReadID, remainCount, MPI_INT, winMark);
-				MPI_Win_unlock(0, winMark);
-				for(int i=0;i<remainCount;i++)
+				int *globalMarked=new int[numElements];
+				MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, winMark);
+				MPI_Get(globalMarked, numElements, MPI_INT, 0, 0, numElements, MPI_INT, winMark);
+				MPI_Win_flush(0, winMark);
+				for(int i=0;i<numElements;i++)
 				{
-					if(remainingToMark==0)
+					if(globalMarked[i]==1 || myMarked[i]==1)
 					{
-						startReadID=prevReadID=prevReadID+i+1;
-						int isMarked=1;
-						MPI_Win_lock(MPI_LOCK_SHARED, 0, 0, winMark);
-						MPI_Put(&isMarked, 1, MPI_INT, 0, startReadID-1, 1, MPI_INT, winMark);
-						MPI_Win_unlock(0, winMark);
-						break;
+						globalMarked[i]=myMarked[i]=1;
 					}
 				}
-				delete remainingToMark;
+				MPI_Put(globalMarked, numElements, MPI_INT, 0, 0, numElements, MPI_INT, winMark);
+				MPI_Win_unlock(0, winMark);
+				delete globalMarked;
 			}
 			/*Get remaining global window...*/
+			//Window updates finished
+			// Look for next start point
+			startReadID=0;
+			for(int i=0;i<numElements;i++)
+			{
+				if(myMarked[i]==0)
+				{
+					startReadID=i+1;
+					break;
+				}
+			}
 		}
+		delete myMarked;
 	}
+	hashTable->unLockAll();
 	MPI_Win_free(&winMark);
 	MPI_Free_mem(allMarked);
 	hashTable->endEpoch();
@@ -285,7 +283,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 	if(filePointer == NULL)
 		MYEXIT("Unable to open file: +"+fnamePrefix+"_containedReads.txt");
 	UINT64 nextReadOffset=0;
-
+	hashTable->setLockAll();
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
 		UINT64 thisReadOffset=0;
@@ -405,6 +403,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 			hashTable->deleteLocalHitList(localReadHits);
 		}//end of while
 	}
+	hashTable->unLockAll();
 	filePointer.close();
 	hashTable->endEpoch();
 	int ctdReads=0;
