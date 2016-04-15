@@ -27,14 +27,12 @@
 #include <map>
 #include <string>
 #include <cstring>
-#include <hash_map>
 #include <queue>
 #include <omp.h>
 #include <cmath>
 #include <ctime>
 #include <functional>
 #include <mpi.h>
-#include <bitset>
 #include <stdexcept>
 #include <stdint.h>
 using namespace std;

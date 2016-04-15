@@ -781,30 +781,31 @@ UINT64 HashTable::getReadLength(UINT64 globalOffset, int myid) const
 	dataRec=0;
 	int rank = getOffsetRank(globalOffset);
 	UINT64 localOffset = getLocalOffset(globalOffset,rank);
-	#pragma omp critical(getRemoteData)
-	{
-		MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
-		MPI_Get(&dataRec, 1, MPI_UINT64_T, rank, localOffset, 1, MPI_UINT64_T, win);
-		MPI_Win_unlock(rank, win);
-	}
+	MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
+	MPI_Get(&dataRec, 1, MPI_UINT64_T, rank, localOffset, 1, MPI_UINT64_T, win);
+	MPI_Win_unlock(rank, win);
 	return ((dataRec >> 48) & 0X0000000000007FFF); 	//2nd MSB to 16th MSB are read length
 	return 0;
 }
 
 string HashTable::getStringForward(UINT64 globalOffset, int myid) const
 {
-	UINT64 stringLen=getReadLength(globalOffset, myid);
-	int rank = getOffsetRank(globalOffset);
-	INT64 localOffset = getLocalOffset(globalOffset,rank);
-	UINT64 dna_word_len = (stringLen / 32) + (stringLen % 32 != 0);
-	UINT64 dataBlock[dna_word_len];
+	UINT64 *dataBlock = NULL;
+	string seq="";
 	#pragma omp critical(getRemoteData)
 	{
+		UINT64 stringLen=getReadLength(globalOffset, myid);
+		int rank = getOffsetRank(globalOffset);
+		INT64 localOffset = getLocalOffset(globalOffset,rank);
+		UINT64 dna_word_len = (stringLen / 32) + (stringLen % 32 != 0);
+		dataBlock = new UINT64[dna_word_len];
 		MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
 		MPI_Get(dataBlock, dna_word_len, MPI_UINT64_T, rank, localOffset+1, dna_word_len, MPI_UINT64_T, win);
 		MPI_Win_unlock(rank, win);
+		seq = toStringMPI(dataBlock,stringLen,0);
 	}
-	return toStringMPI(dataBlock,stringLen,0);
+	delete dataBlock;
+	return seq;
 }
 
 string HashTable::getStringReverse(UINT64 globalOffset, int myid) const

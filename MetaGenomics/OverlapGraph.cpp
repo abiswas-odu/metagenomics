@@ -148,7 +148,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				while(!nodeQ->empty()) 													// This loop will explore all connected component starting from read startReadID.
 				{
 					UINT64 read1 = nodeQ->front();										//Pop from queue...
-					cout<<"Proc:"<<myProcID<<" srarting from "<<read1<<endl;
+					//cout<<"Proc:"<<myProcID<<" srarting from "<<read1<<endl;
 					nodeQ->pop();
 					int isPrevMarked=1;
 					#pragma omp critical(getRemoteData)
@@ -236,24 +236,29 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			delete exploredReads;
 			delete nodeQ;
 			startReadID=0;
+			/*Get remaining global window...*/
 			#pragma omp critical(getRemoteData)
 			{
-				for(UINT64 i=prevReadID;i<=numElements;i++)
+				int remainCount = numElements-prevReadID;
+				int *remainingToMark=new int[remainCount];
+				MPI_Win_lock(MPI_LOCK_SHARED, 0, 0, winMark);
+				MPI_Get(remainingToMark, remainCount, MPI_INT, 0, prevReadID, remainCount, MPI_INT, winMark);
+				MPI_Win_unlock(0, winMark);
+				for(int i=0;i<remainCount;i++)
 				{
-					int isPrevMarked=1;
-					MPI_Win_lock(MPI_LOCK_SHARED, 0, 0, winMark);
-					MPI_Get(&isPrevMarked, 1, MPI_INT, 0, i-1, 1, MPI_INT, winMark);
-					MPI_Win_unlock(0, winMark);
-					if(isPrevMarked==0){
-						isPrevMarked=1;
-						startReadID=prevReadID=i;
+					if(remainingToMark==0)
+					{
+						startReadID=prevReadID=prevReadID+i+1;
+						int isMarked=1;
 						MPI_Win_lock(MPI_LOCK_SHARED, 0, 0, winMark);
-						MPI_Put(&isPrevMarked, 1, MPI_INT, 0, i-1, 1, MPI_INT, winMark);
+						MPI_Put(&isMarked, 1, MPI_INT, 0, startReadID-1, 1, MPI_INT, winMark);
 						MPI_Win_unlock(0, winMark);
 						break;
 					}
 				}
+				delete remainingToMark;
 			}
+			/*Get remaining global window...*/
 		}
 	}
 	MPI_Win_free(&winMark);
@@ -280,118 +285,125 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 	if(filePointer == NULL)
 		MYEXIT("Unable to open file: +"+fnamePrefix+"_containedReads.txt");
 	UINT64 nextReadOffset=0;
-	#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
-	for(UINT64 i = 0; i < hashTable->getMemoryReadCount(myProcID); i++) // For each read
+
+	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
 		UINT64 thisReadOffset=0;
+		//assign initial start points...
 		#pragma omp critical(assignNextOffset)
 		{
 			thisReadOffset=nextReadOffset;
-			if(thisReadOffset<hashTable->getMemoryMaxLocalOffset(myProcID))			//Read offset exceeds local limit...
+			if(nextReadOffset<hashTable->getMemoryMaxLocalOffset(myProcID))			//Read offset exceeds local limit...
 				nextReadOffset = hashTable->getLocalNextOffset(nextReadOffset,myProcID); // Get the next read
 		}
-
-		if(thisReadOffset>=hashTable->getMemoryMaxLocalOffset(myProcID))			//Read offset exceeds local limit...
-			continue;
-		UINT64 read1ID = hashTable->getLocalReadID(thisReadOffset,myProcID); // Get the read
-
-		Read *read1 = dataSet->getReadFromID(read1ID);
-		string read1String = hashTable->getLocalStringForward(thisReadOffset,myProcID); // Get the forward of the read
-		UINT64 read1Len=read1String.length();
-		if(read1->superReadID!=0 || !hashTable->needsProcessing(read1ID,read1String,myProcID))		//If read is already marked as contained, there is no need to look for contained reads within it
-																									//If read will be processed by another node then don't proceed
-			continue;
-
-		vector<UINT64*> *localReadHits;
-		/*Start global communication epoch*/
-		localReadHits = hashTable->setLocalHitList(read1String,myProcID); // Search the substring in the hash table
-		/*End global communication epoch*/
-		string subString;
-		for(UINT64 j = 0; j < read1String.length() - hashTable->getHashStringLength(); j++) // fGr each substring of read1 of length getHashStringLength
+		while(thisReadOffset<hashTable->getMemoryMaxLocalOffset(myProcID))
 		{
-			subString = read1String.substr(j,hashTable->getHashStringLength()); // Get the substring from read1
-			map<UINT64,string> listOfReads = hashTable->getLocalHitList(localReadHits, subString, j);
-			if(!listOfReads.empty()) // If other reads contain the substring as prefix or suffix
+			UINT64 read1ID = hashTable->getLocalReadID(thisReadOffset,myProcID); // Get the read
+			Read *read1 = dataSet->getReadFromID(read1ID);
+			string read1String = hashTable->getLocalStringForward(thisReadOffset,myProcID); // Get the forward of the read
+			UINT64 read1Len=read1String.length();
+			//assign next start point...
+			#pragma omp critical(assignNextOffset)
 			{
-				for(map<UINT64,string>::iterator it=listOfReads.begin() ; it!=listOfReads.end(); ++it) // For each read in the list.
-				{
-					UINT64 data = it->first; // We used bit operation in the hash table to store read ID and orientation
-					UINT64 read2ID = data & 0X3FFFFFFFFFFFFFFF;
-					string read2String = it->second;
-					Read *read2 = dataSet->getReadFromID(read2ID); 	// Least significant 62 bits store the read number.
-																						// Most significant 2 bits store the orientation.
-																						// Orientation 0 means prefix of forward of the read
-																						// Orientation 1 means suffix of forward of the read
-																						// Orientation 2 means prefix of reverse of the read
-																						// Orientation 3 means prefix of reverse of the read
-					UINT64 read2Len = read2String.length();
-					if(read1->getReadNumber() != read2->getReadNumber() && checkOverlapForContainedRead(read1String,read2String,(data >> 62),j)) // read1 need to be longer than read2 in order to contain read2
-																																			 // Check if the remaining of the strings also match
-					{
-						if(read1String.length() > read2Len)
-						{
-							UINT64 overlapLen=0;
-							UINT64 orientation=1;
-							switch (data >> 62) // Most significant 2 bit represents  00 - prefix forward, 01 - suffix forward, 10 -  prefix reverse, 11 -  suffix reverse.
-							{
-								case 0: orientation = 3; overlapLen = read1Len - j; break; 				// 3 = r1>------->r2
-								case 1: orientation = 0; overlapLen = hashTable->getHashStringLength() + j; break; 		// 0 = r1<-------<r2
-								case 2: orientation = 2; overlapLen = read1Len - j; break; 				// 2 = r1>-------<r2
-								case 3: orientation = 1; overlapLen = hashTable->getHashStringLength() + j; break; 		// 1 = r2<------->r2
-							}
-							#pragma omp critical(updateSuperRead)
-							{
-								if(read2->superReadID == 0) // This is the first super read found. we store the ID of the super read.
-										read2->superReadID = i;
-								//Write contained read information regardless as it is a super read has been identified
-								filePointer<<read2->getFileIndex()<<"\t"<<read1->getFileIndex()<<"\t"<<orientation<<","
-										<<overlapLen<<","
-										<<"0"<<","<<"0"<<","								//No substitutions or edits
-										<<read2Len<<","					//Cointained Read (len,start,stop)
-										<<"0"<<","
-										<<read2Len<<","
-										<<read1Len<<","					//Super Read (len,start,stop)
-										<<read1Len-overlapLen<<","
-										<<read1Len-overlapLen+read2Len
-										<<endl;
-							}
-						}
-						else if(read1String.length() == read2Len && read1->getReadNumber() < read2->getReadNumber())
-						{
-							UINT64 overlapLen=0;
-							UINT64 orientation=1;
-							switch (data >> 62) // Most significant 2 bit represents  00 - prefix forward, 01 - suffix forward, 10 -  prefix reverse, 11 -  suffix reverse.
-							{
-								case 0: orientation = 3; overlapLen = read1Len - j; break; 				// 3 = r1>------->r2
-								case 1: orientation = 0; overlapLen = hashTable->getHashStringLength() + j; break; 		// 0 = r1<-------<r2
-								case 2: orientation = 2; overlapLen = read1Len - j; break; 				// 2 = r1>-------<r2
-								case 3: orientation = 1; overlapLen = hashTable->getHashStringLength() + j; break; 		// 1 = r2<------->r2
-							}
-							#pragma omp critical(updateSuperRead)
-							{
-								if(read2->superReadID==0)
-									read2->superReadID = i;
-								if(read1->getReadNumber() < read2->superReadID)
-									read2->superReadID = i;
+				thisReadOffset=nextReadOffset;
+				if(nextReadOffset<hashTable->getMemoryMaxLocalOffset(myProcID))			//Read offset exceeds local limit...
+					nextReadOffset = hashTable->getLocalNextOffset(nextReadOffset,myProcID); // Get the next read
+			}
+			if(read1->superReadID!=0 || !hashTable->needsProcessing(read1ID,read1String,myProcID))		//If read is already marked as contained, there is no need to look for contained reads within it
+																										//If read will be processed by another node then don't proceed
+				continue;
 
-								//Write duplicate read information regardless as it is a super read has been identified
-								filePointer<<read2->getFileIndex()<<"\t"<<read1->getFileIndex()<<"\t"<<orientation<<","
-										<<overlapLen<<","
-										<<"0"<<","<<"0"<<","								//No substitutions or edits
-										<<read2Len<<","					//Duplicate Read (len,start,stop)
-										<<"0"<<","
-										<<read2Len<<","
-										<<read1Len<<","					//Super Read (len,start,stop)
-										<<read1Len-overlapLen<<","
-										<<read1Len-overlapLen+read2Len
-										<<endl;
+			vector<UINT64*> *localReadHits;
+			/*Start global communication epoch*/
+			localReadHits = hashTable->setLocalHitList(read1String,myProcID); // Search the substring in the hash table
+			/*End global communication epoch*/
+			string subString;
+			for(UINT64 j = 0; j < read1String.length() - hashTable->getHashStringLength(); j++) // fGr each substring of read1 of length getHashStringLength
+			{
+				subString = read1String.substr(j,hashTable->getHashStringLength()); // Get the substring from read1
+				map<UINT64,string> listOfReads = hashTable->getLocalHitList(localReadHits, subString, j);
+				if(!listOfReads.empty()) // If other reads contain the substring as prefix or suffix
+				{
+					for(map<UINT64,string>::iterator it=listOfReads.begin() ; it!=listOfReads.end(); ++it) // For each read in the list.
+					{
+						UINT64 data = it->first; // We used bit operation in the hash table to store read ID and orientation
+						UINT64 read2ID = data & 0X3FFFFFFFFFFFFFFF;
+						string read2String = it->second;
+						Read *read2 = dataSet->getReadFromID(read2ID); 	// Least significant 62 bits store the read number.
+																							// Most significant 2 bits store the orientation.
+																							// Orientation 0 means prefix of forward of the read
+																							// Orientation 1 means suffix of forward of the read
+																							// Orientation 2 means prefix of reverse of the read
+																							// Orientation 3 means prefix of reverse of the read
+						UINT64 read2Len = read2String.length();
+						if(read1->getReadNumber() != read2->getReadNumber() && checkOverlapForContainedRead(read1String,read2String,(data >> 62),j)) // read1 need to be longer than read2 in order to contain read2
+																																				 // Check if the remaining of the strings also match
+						{
+							if(read1String.length() > read2Len)
+							{
+								UINT64 overlapLen=0;
+								UINT64 orientation=1;
+								switch (data >> 62) // Most significant 2 bit represents  00 - prefix forward, 01 - suffix forward, 10 -  prefix reverse, 11 -  suffix reverse.
+								{
+									case 0: orientation = 3; overlapLen = read1Len - j; break; 				// 3 = r1>------->r2
+									case 1: orientation = 0; overlapLen = hashTable->getHashStringLength() + j; break; 		// 0 = r1<-------<r2
+									case 2: orientation = 2; overlapLen = read1Len - j; break; 				// 2 = r1>-------<r2
+									case 3: orientation = 1; overlapLen = hashTable->getHashStringLength() + j; break; 		// 1 = r2<------->r2
+								}
+								#pragma omp critical(updateSuperRead)
+								{
+									if(read2->superReadID == 0) // This is the first super read found. we store the ID of the super read.
+											read2->superReadID = read1ID;
+									//Write contained read information regardless as it is a super read has been identified
+									filePointer<<read2->getFileIndex()<<"\t"<<read1->getFileIndex()<<"\t"<<orientation<<","
+											<<overlapLen<<","
+											<<"0"<<","<<"0"<<","								//No substitutions or edits
+											<<read2Len<<","					//Cointained Read (len,start,stop)
+											<<"0"<<","
+											<<read2Len<<","
+											<<read1Len<<","					//Super Read (len,start,stop)
+											<<read1Len-overlapLen<<","
+											<<read1Len-overlapLen+read2Len
+											<<endl;
+								}
+							}
+							else if(read1String.length() == read2Len && read1->getReadNumber() < read2->getReadNumber())
+							{
+								UINT64 overlapLen=0;
+								UINT64 orientation=1;
+								switch (data >> 62) // Most significant 2 bit represents  00 - prefix forward, 01 - suffix forward, 10 -  prefix reverse, 11 -  suffix reverse.
+								{
+									case 0: orientation = 3; overlapLen = read1Len - j; break; 				// 3 = r1>------->r2
+									case 1: orientation = 0; overlapLen = hashTable->getHashStringLength() + j; break; 		// 0 = r1<-------<r2
+									case 2: orientation = 2; overlapLen = read1Len - j; break; 				// 2 = r1>-------<r2
+									case 3: orientation = 1; overlapLen = hashTable->getHashStringLength() + j; break; 		// 1 = r2<------->r2
+								}
+								#pragma omp critical(updateSuperRead)
+								{
+									if(read2->superReadID==0)
+										read2->superReadID = read1ID;
+									if(read1->getReadNumber() < read2->superReadID)
+										read2->superReadID = read1ID;
+
+									//Write duplicate read information regardless as it is a super read has been identified
+									filePointer<<read2->getFileIndex()<<"\t"<<read1->getFileIndex()<<"\t"<<orientation<<","
+											<<overlapLen<<","
+											<<"0"<<","<<"0"<<","								//No substitutions or edits
+											<<read2Len<<","					//Duplicate Read (len,start,stop)
+											<<"0"<<","
+											<<read2Len<<","
+											<<read1Len<<","					//Super Read (len,start,stop)
+											<<read1Len-overlapLen<<","
+											<<read1Len-overlapLen+read2Len
+											<<endl;
+								}
 							}
 						}
 					}
 				}
-			}
-		}//End of inner for
-		hashTable->deleteLocalHitList(localReadHits);
+			}//End of inner for
+			hashTable->deleteLocalHitList(localReadHits);
+		}//end of while
 	}
 	filePointer.close();
 	hashTable->endEpoch();

@@ -45,6 +45,7 @@ class HashTable{
 		void setHashTableDataSize(int myid);		// Set the size of the hash data table.
 		UINT64 getHashIndex(const string & subString) const;	//Convert a set of data bytes from hash data table to DNA string
 		string toString(UINT64 hashDataIndex,UINT64 stringLen) const;
+		UINT64 getReadLength(UINT64 globalOffset, int myid) const; 		// Get the length of the string in the read at offset. NOT threadsafe
 	public:
 		HashTable(UINT64 parallelProcessPoolSize);							// Default constructor.
 		~HashTable();								// Destructor.
@@ -60,7 +61,7 @@ class HashTable{
 
 		string getStringForward(UINT64 globalOffset, int myid) const; 			// Get the forward string of the read at offset.
 		string getStringReverse(UINT64 globalOffset, int myid) const;  			// Get the reverse string of the read at offset.
-		UINT64 getReadLength(UINT64 globalOffset, int myid) const; 								// Get the length of the string in the read at offset.
+
 
 		void readReadLengthsFromFile(string fileName, UINT64 minOverlap,UINT64 *hashRecordCounts);
 		void populateReadLengths(UINT64 *hashRecordCounts);												//Populate the read lengths in the hash table for future offset calculation
