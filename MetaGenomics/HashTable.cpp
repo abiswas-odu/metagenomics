@@ -44,6 +44,9 @@ HashTable::HashTable(UINT64 parallelProcessPoolSize)
 	hashTable = NULL;
 	hashData = NULL;
 	win = MPI_WIN_NULL;
+	cachedHashTable=NULL;
+	hashQ=NULL;
+	rmaCtr=0;
 }
 
 
@@ -60,6 +63,10 @@ void HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parall
 	numberOfHashCollision = 0;
 	UINT64 size = getPrimeLargerThanNumber(d->getNumberOfUniqueReads() * 8 + 1);  // Size should be at least twice the number of entries in the hash table to reduce hash collision.
 	setHashTableSize(size);
+
+	//Set cache size
+	cachedHashTable = new map<UINT64, UINT64*>();
+	hashQ = new queue<UINT64>;
 
 	UINT64 *hashRecordCounts = new UINT64[hashTableSize];
 	std::memset(hashTable, 0, hashTableSize*sizeof(UINT64));
@@ -403,8 +410,6 @@ UINT64 HashTable::hashFunction(const string & subString) const
 	return ((sum1 % hashTableSize) * (sum2  % hashTableSize)) % hashTableSize; 	// Modulus operation to get the index in the hash table.
 }
 
-
-
 /**********************************************************************************************************************
 	Insert a subString in a hashTable
 **********************************************************************************************************************/
@@ -535,9 +540,9 @@ int HashTable::getOffsetRank(UINT64 globalOffset) const
 	return rank;
 }
 /**********************************************************************************************************************
-	Populate a list of read containing the subString as prefix or suffix.
+	Populate a list of reads from the hash table containing the subString as prefix or suffix. Do not cache result...
 **********************************************************************************************************************/
-vector<UINT64*> * HashTable::setLocalHitList(const string readString, int myid)
+vector<UINT64*> * HashTable::setLocalHitList_nocache(const string readString, int myid)
 {
 	vector<UINT64*> *localReadHits;				//AB: store data locally
 	#pragma omp critical(getRemoteData)
@@ -565,6 +570,7 @@ vector<UINT64*> * HashTable::setLocalHitList(const string readString, int myid)
 				//MPI_Win_lock(MPI_LOCK_SHARED, t_rank, 0, win);
 				MPI_Get(localReadHits->at(j), hash_block_len, MPI_UINT64_T, t_rank, localOffset, hash_block_len, MPI_UINT64_T, win);
 				MPI_Win_flush(t_rank,win);
+				rmaCtr++;
 				//MPI_Win_unlock(t_rank, win);
 			}
 		}
@@ -572,9 +578,57 @@ vector<UINT64*> * HashTable::setLocalHitList(const string readString, int myid)
 	return localReadHits;
 }
 /**********************************************************************************************************************
-	Get  a list of read containing the subString as prefix or suffix.
+	Populate a list of reads from the hash table containing the subString as prefix or suffix.
 **********************************************************************************************************************/
-map<UINT64,string> HashTable::getLocalHitList(vector<UINT64*> *localReadHits, string subString, UINT64 subStringIndx) const
+vector<UINT64*> * HashTable::setLocalHitList(const string readString, int myid)
+{
+	vector<UINT64*> *localReadHits;				//AB: store data locally
+	#pragma omp critical(getRemoteData)
+	{
+		UINT64 hashQueryCount = readString.length() - getHashStringLength();
+		localReadHits = new vector<UINT64*>(hashQueryCount);
+		for(UINT64 j = 0; j < readString.length() - getHashStringLength(); j++) // for each substring of read1 of length getHashStringLength
+		{
+			string subString = readString.substr(j,getHashStringLength()); // Get the substring from read string
+			UINT64 index = getHashIndex(subString);	// Get the index using the hash function.
+			//Compute various indices
+			UINT64 globalStartOffset=hashTable[index];
+			UINT64 globalEndOffset= (index==hashTableSize-1)?hashDataTableSize:hashTable[index+1];
+			UINT64 hash_block_len = globalEndOffset-globalStartOffset;
+			localReadHits->at(j)=NULL;
+			if(hash_block_len)
+			{
+				if(checkCachedHashTable(index))
+				{
+					localReadHits->at(j)=getCachedHashTable(index, hash_block_len);
+				}
+				else
+				{
+					int t_rank = getOffsetRank(globalStartOffset);
+					UINT64 localOffset = getLocalOffset(globalStartOffset,t_rank);
+					//cout<<"oRank:"<<myid<<", tRank:"<<t_rank<<", len:"<<hash_block_len<<", Offset:"<<localOffset<<endl;
+					//Allocate memory
+					localReadHits->at(j) = new UINT64[hash_block_len];
+					std::memset(localReadHits->at(j), 0, hash_block_len*sizeof(MPI_UINT64_T));
+					// Get data from RMA
+					//MPI_Win_lock(MPI_LOCK_SHARED, t_rank, 0, win);
+					MPI_Get(localReadHits->at(j), hash_block_len, MPI_UINT64_T, t_rank, localOffset, hash_block_len, MPI_UINT64_T, win);
+					MPI_Win_flush(t_rank,win);
+					UINT64* cacheBlock = new UINT64[hash_block_len];
+					std::memcpy(cacheBlock, localReadHits->at(j), hash_block_len*sizeof(MPI_UINT64_T));
+					insertCachedHashTable(index, cacheBlock);
+					rmaCtr++;
+					//MPI_Win_unlock(t_rank, win);
+				}
+			}
+		}
+	}
+	return localReadHits;
+}
+/**********************************************************************************************************************
+	Get  a list of read containing the subString as prefix or suffix. Release cache on completion.
+**********************************************************************************************************************/
+map<UINT64,string> HashTable::getLocalHitList(vector<UINT64*> *localReadHits, string subString, UINT64 subStringIndx)
 {
 	map<UINT64,string> retMap;
 	UINT64 *dataBlock=localReadHits->at(subStringIndx);
@@ -639,7 +693,65 @@ void HashTable::deleteLocalHitList(vector<UINT64*> *localReadHits)
 	}
 	delete localReadHits;
 	localReadHits=NULL;
+}
 
+/**********************************************************************************************************************
+	Get  a list of read containing the subString as prefix or suffix. No caching used.
+**********************************************************************************************************************/
+map<UINT64,string> HashTable::getLocalHitList_nocache(vector<UINT64*> *localReadHits, string subString, UINT64 subStringIndx)
+{
+	map<UINT64,string> retMap;
+	UINT64 *dataBlock=localReadHits->at(subStringIndx);
+	if(dataBlock)
+	{
+		UINT64 index = getHashIndex(subString);	// Get the index using the hash function.
+		//Compute various indices
+		UINT64 globalStartOffset=hashTable[index];
+		UINT64 globalEndOffset= (index==hashTableSize-1)?hashDataTableSize:hashTable[index+1];
+		UINT64 hash_block_len = globalEndOffset-globalStartOffset;
+		UINT64 startOffset=0;
+		while(startOffset<hash_block_len)
+		{
+			UINT64 readID = dataBlock[startOffset] & 0X0000FFFFFFFFFFFF;
+			UINT64 orient = dataBlock[startOffset] >> 63;
+			UINT64 stringLen = (dataBlock[startOffset] >> 48) & 0X0000000000007FFF;
+			UINT64 dataLen = (stringLen / 32) + (stringLen % 32 != 0);
+			string forwardRead = toStringMPI(dataBlock, stringLen, startOffset+1);
+			//cout<<"rid:"<<readID<<", ori:"<<orient<<", len:"<<stringLen<<", Read:"<<forwardRead<<endl;
+			if(orient==0){
+				string prefixForward = forwardRead.substr(0,hashStringLength);
+				string suffixReverse = reverseComplement(prefixForward);
+				if(subString==prefixForward)
+				{
+					UINT64 orientation=0;
+					UINT64 data = readID | (orientation << 62);
+					retMap.insert(pair<UINT64,string>(data,forwardRead));
+				}
+				else if(subString==suffixReverse){
+					UINT64 orientation=3;
+					UINT64 data = readID | (orientation << 62);
+					retMap.insert(pair<UINT64,string>(data,forwardRead));
+				}
+			}
+			else {
+				string suffixForward = forwardRead.substr(forwardRead.length() - hashStringLength,hashStringLength);
+				string prefixReverse = reverseComplement(suffixForward);
+				if(subString==suffixForward)
+				{
+					UINT64 orientation=1;
+					UINT64 data = readID | (orientation << 62);
+					retMap.insert(pair<UINT64,string>(data,forwardRead));
+				}
+				else if(subString==prefixReverse){
+					UINT64 orientation=2;
+					UINT64 data = readID | (orientation << 62);
+					retMap.insert(pair<UINT64,string>(data,forwardRead));
+				}
+			}
+			startOffset+=dataLen+1;
+		}
+	}
+	return retMap;
 }
 
 /**********************************************************************************************************************
@@ -683,7 +795,13 @@ HashTable::~HashTable(void)
 	delete memoryDataPartitions;
 	MPI_Win_free(&win);
 	MPI_Free_mem(hashData);
-	//delete hashData;
+
+	//delete cache entries
+	for(map<UINT64,UINT64*>::iterator it=cachedHashTable->begin() ; it!=cachedHashTable->end(); ++it) // For each read in the list.
+		delete it->second;
+	//delete cache table
+	delete cachedHashTable;
+	delete hashQ;
 }
 
 /*
@@ -785,6 +903,7 @@ UINT64 HashTable::getReadLength(UINT64 globalOffset, int myid) const
 	//MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
 	MPI_Get(&dataRec, 1, MPI_UINT64_T, t_rank, localOffset, 1, MPI_UINT64_T, win);
 	MPI_Win_flush(t_rank,win);
+	rmaCtr++;
 	//MPI_Win_unlock(rank, win);
 	return ((dataRec >> 48) & 0X0000000000007FFF); 	//2nd MSB to 16th MSB are read length
 	return 0;
@@ -805,6 +924,7 @@ string HashTable::getStringForward(UINT64 globalOffset, int myid) const
 		//MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
 		MPI_Get(dataBlock, dna_word_len, MPI_UINT64_T, t_rank, localOffset+1, dna_word_len, MPI_UINT64_T, win);
 		MPI_Win_flush(t_rank,win);
+		rmaCtr++;
 		//MPI_Win_unlock(rank, win);
 		seq = toStringMPI(dataBlock,stringLen,0);
 	}
@@ -838,5 +958,58 @@ bool HashTable::needsProcessing(UINT64 read1ID, string readString, int myid)
 		computeRank = rank1>rank2?rank1:rank2;
 	}
 	return (myid==computeRank?true:false);
+}
+
+bool HashTable::checkCachedHashTable(UINT64 index)
+{
+	map<UINT64, UINT64*>::iterator it;
+	it = cachedHashTable->find(index);
+	if (it != cachedHashTable->end())
+		return true;
+	else
+		return false;
+}
+
+UINT64 * HashTable::getCachedHashTable(UINT64 index, UINT64 hash_block_len)
+{
+	map<UINT64, UINT64*>::iterator it;
+	it = cachedHashTable->find(index);
+	if (it != cachedHashTable->end())
+	{
+		UINT64* cacheBlock = new UINT64[hash_block_len];
+		std::memcpy(cacheBlock, it->second, hash_block_len*sizeof(MPI_UINT64_T));
+		return cacheBlock;
+	}
+	else
+		return NULL;
+}
+void HashTable::insertCachedHashTable(UINT64 index, UINT64* loc)
+{
+	if(cachedHashTable->size()<HASH_CACHE_SIZE)
+	{
+		cachedHashTable->insert(pair<UINT64, UINT64*>(index,loc));
+		hashQ->push(index);
+	}
+	else if(cachedHashTable->size()>0)
+	{
+		UINT64 oindex = hashQ->front();
+		hashQ->pop();
+		map<UINT64, UINT64*>::iterator it = cachedHashTable->find(oindex);
+		delete it->second;
+		cachedHashTable->erase(it);
+		hashQ->push(index);
+		cachedHashTable->insert(pair<UINT64, UINT64*>(index,loc));
+	}
+}
+
+void HashTable::clearCache()
+{
+	//delete cache entries
+	for(map<UINT64,UINT64*>::iterator it=cachedHashTable->begin() ; it!=cachedHashTable->end(); ++it) // For each read in the list.
+	{
+		delete it->second;
+		hashQ->pop();
+	}
+	cachedHashTable->clear();
 }
 

@@ -109,6 +109,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	dataSet = ht->getDataset();
 
 	markContainedReads(fnamePrefix, numprocs);
+
 	/*create sync window in master*/
 	MPI_Win winMark=NULL;
 	int *allMarked=NULL;
@@ -128,14 +129,13 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	}
 	MPI_Win_fence(0, winMark);
 	hashTable->setLockAll();
+	int *myMarked=new int[numElements];								//List of reads already marked locally by this process or lazy globally
+	std::memset(myMarked, 0, numElements*sizeof(int));				//0 not marked; >0 already marked
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
 		int threadID = omp_get_thread_num();
 		UINT64 startReadID=(myProcID*parallelThreadPoolSize)+threadID+1;
-		int *myMarked=new int[numElements];								//List of reads already marked locally or lazy globally
-		std::memset(myMarked, 0, numElements*sizeof(int));
-		myMarked[startReadID-1]=1;
-		while(startReadID!=0) // Loop till all nodes marked
+		while(startReadID!=0 && startReadID<=dataSet->getNumberOfUniqueReads()) // Loop till all nodes marked
 		{
 			map<UINT64,nodeType> *exploredReads = new map<UINT64,nodeType>;							//Record of nodes processed
 			queue<UINT64> *nodeQ = new queue<UINT64>;												//Queue
@@ -152,9 +152,10 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					UINT64 read1 = nodeQ->front();										//Pop from queue...
 					//cout<<"Proc:"<<myProcID<<" srarting from "<<read1<<endl;
 					nodeQ->pop();
-					if(myMarked[read1-1]==0 || read1==startReadID)
+					if(myMarked[read1-1]==0)
 					{
-						myMarked[read1-1]=1;									//Mark this as being processed by this thread
+						#pragma omp atomic
+							myMarked[read1-1]++;									//Mark this as being processed by this thread
 						if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
 						{
 							insertAllEdgesOfRead(read1, exploredReads, parGraph);					// Explore current node.
@@ -208,6 +209,27 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					{
 						saveParGraphToFile(fnamePrefix + "_" + SSTR(myProcID) + "_" + SSTR(threadID) + "_parGraph.txt" , exploredReads, parGraph);
 						writtenMakedNodes=0;
+						// Update my and global marked window...
+						/*Get remaining global window...*/
+						#pragma omp critical(getRemoteData)
+						{
+							int *globalMarked=new int[numElements];
+							MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, winMark);
+							MPI_Get(globalMarked, numElements, MPI_INT, 0, 0, numElements, MPI_INT, winMark);
+							MPI_Win_flush(0, winMark);
+							for(int i=0;i<numElements;i++)
+							{
+								if(globalMarked[i]==1 || myMarked[i]!=0)
+								{
+									globalMarked[i]=myMarked[i]=1;
+								}
+							}
+							MPI_Put(globalMarked, numElements, MPI_INT, 0, 0, numElements, MPI_INT, winMark);
+							MPI_Win_unlock(0, winMark);
+							delete globalMarked;
+						}
+						/*Get remaining global window...*/
+						//Window updates finished
 					}
 				}
 			}
@@ -234,7 +256,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				MPI_Win_flush(0, winMark);
 				for(int i=0;i<numElements;i++)
 				{
-					if(globalMarked[i]==1 || myMarked[i]==1)
+					if(globalMarked[i]==1 || myMarked[i]!=0)
 					{
 						globalMarked[i]=myMarked[i]=1;
 					}
@@ -256,13 +278,14 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				}
 			}
 		}
-		delete myMarked;
 	}
+	delete myMarked;
 	hashTable->unLockAll();
 	MPI_Win_free(&winMark);
 	MPI_Free_mem(allMarked);
 	hashTable->endEpoch();
 	cout<<endl<<"Graph Construction Complete"<<endl;
+	cout<<"Process:"<<myProcID<<" RMA OPS:"<<hashTable->getRMACount()<<endl;
 	CLOCKSTOP;
 	return true;
 }
@@ -406,6 +429,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 	hashTable->unLockAll();
 	filePointer.close();
 	hashTable->endEpoch();
+	hashTable->clearCache();
 	int ctdReads=0;
 
 	//Get contained read count
@@ -456,6 +480,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 					Read *read1 = dataSet->getReadFromID(readIDBuf[i]); // Get the read
 					read1->superReadID=1;
 				}
+				delete readIDBuf;
 			}
 		}
 	}
@@ -469,6 +494,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 	}
 	cout<< endl << setw(10) << nonContainedReads << " Non-contained reads. (Keep as is)" << endl;
 	cout<< setw(10) << dataSet->getNumberOfUniqueReads()-nonContainedReads << " contained reads. (Need to change their mate-pair information)" << endl;
+	cout<<"Process:"<<myProcID<<" RMA OPS:"<<hashTable->getRMACount()<<endl;
 	CLOCKSTOP;
 }
 
@@ -610,9 +636,8 @@ bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> 
 	vector<UINT64> insertedEdgeList;
 	UINT64 read1Len = readString.length();
 
-	vector<UINT64*> *localReadHits;
 	/*Start global communication epoch*/
-	localReadHits = hashTable->setLocalHitList(readString,myProcID); // Search the substring in the hash table
+	vector<UINT64*> *localReadHits = hashTable->setLocalHitList(readString,myProcID); // Search the substring in the hash table
 	/*End global communication epoch*/
 	for(UINT64 j = 1; j < read1Len-hashTable->getHashStringLength(); j++) // For each proper substring of length getHashStringLength of read1
 	{

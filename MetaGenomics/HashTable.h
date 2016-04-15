@@ -22,6 +22,8 @@ enum
 };
 #define BASE_MASK 0x0000000000000003	/* binary: 11 */
 
+#define HASH_CACHE_SIZE 100000000
+
 /**********************************************************************************************************************
 	Class to store hashtable.
 **********************************************************************************************************************/
@@ -32,6 +34,8 @@ class HashTable{
 		vector<UINT64> *memoryHashPartitions;
 		vector<UINT64> *memoryDataPartitions;
 		vector<UINT64> *memoryReadCount;
+		map<UINT64, UINT64*> *cachedHashTable;
+		queue<UINT64> *hashQ;
 		UINT64 hashTableSize; 						// Ted: Size of the hash table. This is the prime number of mod operation.
 		UINT64 hashDataTableSize; 					// Ted: Size of the hash data table. This is based on the number of reads.
 		UINT64 *hashTable; 							// AB: List of hash offset of each hash key location
@@ -39,6 +43,7 @@ class HashTable{
 		UINT16 hashStringLength;					// Ted: Length of prefix and suffix of the reads to hash. This is equal to the minumum overlap length.
 		mutable UINT64 numberOfHashCollision;		// Counter to count the number of hash collisions. For debugging only.
 													// It's mutable such that it can be modified in the const member function, getListOfReads
+		mutable UINT64 rmaCtr;
 		bool insertIntoTable(Read *read, string forwardRead, UINT64 *hashDataLengths, int myid);	// Insert a string in the hash table.
 		bool hashReadLengths(string forwardRead, UINT64 *hashRecordCounts); 					// Ted: Hash prefix and suffix of the read and its reverse complement in the hash table. Turn over to the constant
 		void setHashTableSize(UINT64 size); 		// Set the size of the hash table.
@@ -53,7 +58,7 @@ class HashTable{
 		void insertDataset(Dataset *d, UINT64 minOverlapLength,UINT64 parallelThreadPoolSize,int myid);	// Insert the dataset in the hash table.
 		vector<UINT64*> * setLocalHitList(const string readString, int myid); 			// Get the list of reads that contain subString as prefix or suffix.
 		void deleteLocalHitList(vector<UINT64*> *localReadHits);
-		map<UINT64,string> getLocalHitList(vector<UINT64*> *localReadHits, string subString, UINT64 subStringIndx) const;
+		map<UINT64,string> getLocalHitList(vector<UINT64*> *localReadHits, string subString, UINT64 subStringIndx);
 		UINT64 hashFunction(const string & subString) const; 						// Hash function.
 		UINT64 getHashTableSize(void) const {return hashTableSize;}		// Get the size of the hash table.
 		UINT64 getHashStringLength() const {return hashStringLength;}		// Get the hash string length.
@@ -87,6 +92,17 @@ class HashTable{
 
 		void setLockAll(){ MPI_Win_lock_all(0, win); }
 		void unLockAll(){ MPI_Win_unlock_all(win); }
+
+		/*cache management*/
+		bool checkCachedHashTable(UINT64 index);
+		UINT64 * getCachedHashTable(UINT64 index, UINT64 hash_block_len);
+		void insertCachedHashTable(UINT64 index, UINT64* loc);
+		void clearCache();
+		UINT64 getRMACount(){ return rmaCtr;}
+		bool releaseCachedEntry(UINT64 index);
+		map<UINT64,string> getLocalHitList_nocache(vector<UINT64*> *localReadHits, string subString, UINT64 subStringIndx);
+		vector<UINT64*> * setLocalHitList_nocache(const string readString, int myid);
+
 
 };
 
