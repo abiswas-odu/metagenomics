@@ -226,7 +226,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 							}
 							MPI_Put(globalMarked, numElements, MPI_INT, 0, 0, numElements, MPI_INT, winMark);
 							MPI_Win_unlock(0, winMark);
-							delete globalMarked;
+							delete[] globalMarked;
 						}
 						/*Get remaining global window...*/
 						//Window updates finished
@@ -263,7 +263,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				}
 				MPI_Put(globalMarked, numElements, MPI_INT, 0, 0, numElements, MPI_INT, winMark);
 				MPI_Win_unlock(0, winMark);
-				delete globalMarked;
+				delete[] globalMarked;
 			}
 			/*Get remaining global window...*/
 			//Window updates finished
@@ -279,7 +279,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			}
 		}
 	}
-	delete myMarked;
+	delete[] myMarked;
 	hashTable->unLockAll();
 	MPI_Win_free(&winMark);
 	MPI_Free_mem(allMarked);
@@ -480,12 +480,12 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 					Read *read1 = dataSet->getReadFromID(readIDBuf[i]); // Get the read
 					read1->superReadID=1;
 				}
-				delete readIDBuf;
+				delete[] readIDBuf;
 			}
 		}
 	}
 	//Delete buffer of contained reads
-	delete buf;
+	delete[] buf;
 	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
 	{
 		Read *read1 = dataSet->getReadFromID(i); // Get the read

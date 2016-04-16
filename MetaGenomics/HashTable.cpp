@@ -41,6 +41,8 @@ HashTable::HashTable(UINT64 parallelProcessPoolSize)
 	numberOfHashCollision = 0;
 	memoryHashPartitions = NULL;
 	memoryDataPartitions = NULL;
+	memoryReadCount=NULL;
+	dataSet=NULL;
 	hashTable = NULL;
 	hashData = NULL;
 	win = MPI_WIN_NULL;
@@ -112,7 +114,7 @@ void HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parall
 	}
 	if(rankIndx==parallelProcessPoolSize)
 		memoryReadCount->at(rankIndx-1)=currReadCount;
-	delete hashRecordCounts;
+	delete[] hashRecordCounts;
 	//Update empty ranks with max index...
 	for(;rankIndx<memoryHashPartitions->size();rankIndx++)
 	{
@@ -170,7 +172,7 @@ void HashTable::populateReadData(int myid)
 	{
 		readReadSequenceFromFile(dataSet->singleEndDatasetFileNames.at(i), hashStringLength+1, hashDataLengths, readID, myid);
 	}
-	delete hashDataLengths;
+	delete[] hashDataLengths;
 	MPI_Win_fence(0, win);
 	CLOCKSTOP;
 }
@@ -689,7 +691,7 @@ void HashTable::deleteLocalHitList(vector<UINT64*> *localReadHits)
 	for(size_t i=0;i<localReadHits->size();i++)
 	{
 		if(localReadHits->at(i))
-			delete localReadHits->at(i);
+			delete[] localReadHits->at(i);
 	}
 	delete localReadHits;
 	localReadHits=NULL;
@@ -790,15 +792,16 @@ void HashTable::endEpoch()
 HashTable::~HashTable(void)
 {
 	// Free the memory used by the hash table.
-	delete hashTable;
+	delete[] hashTable;
 	delete memoryHashPartitions;
 	delete memoryDataPartitions;
+	delete memoryReadCount;
 	MPI_Win_free(&win);
 	MPI_Free_mem(hashData);
 
 	//delete cache entries
 	for(map<UINT64,UINT64*>::iterator it=cachedHashTable->begin() ; it!=cachedHashTable->end(); ++it) // For each read in the list.
-		delete it->second;
+		delete[] it->second;
 	//delete cache table
 	delete cachedHashTable;
 	delete hashQ;
@@ -928,7 +931,7 @@ string HashTable::getStringForward(UINT64 globalOffset, int myid) const
 		//MPI_Win_unlock(rank, win);
 		seq = toStringMPI(dataBlock,stringLen,0);
 	}
-	delete dataBlock;
+	delete[] dataBlock;
 	return seq;
 }
 
@@ -995,7 +998,7 @@ void HashTable::insertCachedHashTable(UINT64 index, UINT64* loc)
 		UINT64 oindex = hashQ->front();
 		hashQ->pop();
 		map<UINT64, UINT64*>::iterator it = cachedHashTable->find(oindex);
-		delete it->second;
+		delete[] it->second;
 		cachedHashTable->erase(it);
 		hashQ->push(index);
 		cachedHashTable->insert(pair<UINT64, UINT64*>(index,loc));
@@ -1007,7 +1010,7 @@ void HashTable::clearCache()
 	//delete cache entries
 	for(map<UINT64,UINT64*>::iterator it=cachedHashTable->begin() ; it!=cachedHashTable->end(); ++it) // For each read in the list.
 	{
-		delete it->second;
+		delete[] it->second;
 		hashQ->pop();
 	}
 	cachedHashTable->clear();
