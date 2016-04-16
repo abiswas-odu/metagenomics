@@ -112,7 +112,7 @@ void HashTable::populateReadData()
 	{
 		readReadSequenceFromFile(dataSet->singleEndDatasetFileNames.at(i), hashStringLength+1, hashDataLengths, readID);
 	}
-	delete hashDataLengths;
+	delete[] hashDataLengths;
 	CLOCKSTOP;
 }
 
@@ -518,8 +518,8 @@ string HashTable::reverseComplement(const std::string & seq) const
 HashTable::~HashTable(void)
 {
 	// Free the memory used by the hash table.
-	delete hashTable;
-	delete hashData;
+	delete[] hashTable;
+	delete[] hashData;
 }
 
 /*
