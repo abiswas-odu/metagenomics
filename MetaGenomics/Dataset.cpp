@@ -75,7 +75,7 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 	for(UINT64 i = 0 ; i < reads->size(); i++) 		// Assing ID's to the reads.
 		reads->at(i)->setReadNumber(i + 1);
 	numberOfUniqueReads=reads->size();
-	//reads->shrink_to_fit();
+	reads->shrink_to_fit();
 }
 /**********************************************************************************************************************
 	This function reads the dataset from FASTA/FASTQ files
@@ -234,24 +234,6 @@ Read * Dataset::getReadFromID(UINT64 ID)
 	}
 	return reads->at(ID - 1);
 }
-
-
-/**********************************************************************************************************************
-	This function returns read length of an read
-**********************************************************************************************************************/
-UINT64 Dataset::getReadLength(UINT64 ID)
-{
-	if(ID < 1 || ID > numberOfUniqueReads)	// ID outside the range.
-	{
-		stringstream ss;
-		ss << "ID " << ID << " out of bound.";
-		string s = ss.str();
-		MYEXIT(s);
-	}
-	return reads->at(ID - 1)->getReadLength();
-}
-
-
 
 /**********************************************************************************************************************
 	Default destructor

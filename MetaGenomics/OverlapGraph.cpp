@@ -131,6 +131,8 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	hashTable->setLockAll();
 	int *myMarked=new int[numElements];								//List of reads already marked locally by this process or lazy globally
 	std::memset(myMarked, 0, numElements*sizeof(int));				//0 not marked; >0 already marked
+	int *globalMarked=new int[numElements];
+	std::memset(globalMarked, 0, numElements*sizeof(int));				//0 not marked; >0 already marked
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
 		int threadID = omp_get_thread_num();
@@ -213,7 +215,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 						/*Get remaining global window...*/
 						#pragma omp critical(getRemoteData)
 						{
-							int *globalMarked=new int[numElements];
 							MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, winMark);
 							MPI_Get(globalMarked, numElements, MPI_INT, 0, 0, numElements, MPI_INT, winMark);
 							MPI_Win_flush(0, winMark);
@@ -226,7 +227,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 							}
 							MPI_Put(globalMarked, numElements, MPI_INT, 0, 0, numElements, MPI_INT, winMark);
 							MPI_Win_unlock(0, winMark);
-							delete[] globalMarked;
 						}
 						/*Get remaining global window...*/
 						//Window updates finished
@@ -250,7 +250,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			/*Get remaining global window...*/
 			#pragma omp critical(getRemoteData)
 			{
-				int *globalMarked=new int[numElements];
 				MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, winMark);
 				MPI_Get(globalMarked, numElements, MPI_INT, 0, 0, numElements, MPI_INT, winMark);
 				MPI_Win_flush(0, winMark);
@@ -263,7 +262,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				}
 				MPI_Put(globalMarked, numElements, MPI_INT, 0, 0, numElements, MPI_INT, winMark);
 				MPI_Win_unlock(0, winMark);
-				delete[] globalMarked;
 			}
 			/*Get remaining global window...*/
 			//Window updates finished
@@ -280,6 +278,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 		}
 	}
 	delete[] myMarked;
+	delete[] globalMarked;
 	hashTable->unLockAll();
 	MPI_Win_free(&winMark);
 	MPI_Free_mem(allMarked);
@@ -336,13 +335,14 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 
 			vector<UINT64*> *localReadHits;
 			/*Start global communication epoch*/
-			localReadHits = hashTable->setLocalHitList(read1String,myProcID); // Search the substring in the hash table
+			localReadHits = hashTable->setLocalHitList_nocache(read1String,myProcID); // Search the substring in the hash table
 			/*End global communication epoch*/
 			string subString;
 			for(UINT64 j = 0; j < read1String.length() - hashTable->getHashStringLength(); j++) // fGr each substring of read1 of length getHashStringLength
 			{
 				subString = read1String.substr(j,hashTable->getHashStringLength()); // Get the substring from read1
-				map<UINT64,string> listOfReads = hashTable->getLocalHitList(localReadHits, subString, j);
+				map<UINT64,string> listOfReads;
+				hashTable->getLocalHitList(localReadHits, subString, j, listOfReads);
 				if(!listOfReads.empty()) // If other reads contain the substring as prefix or suffix
 				{
 					for(map<UINT64,string>::iterator it=listOfReads.begin() ; it!=listOfReads.end(); ++it) // For each read in the list.
@@ -362,14 +362,14 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 						{
 							if(read1String.length() > read2Len)
 							{
-								UINT64 overlapLen=0;
+								UINT64 overlapLen=read2Len;
 								UINT64 orientation=1;
 								switch (data >> 62) // Most significant 2 bit represents  00 - prefix forward, 01 - suffix forward, 10 -  prefix reverse, 11 -  suffix reverse.
 								{
-									case 0: orientation = 3; overlapLen = read1Len - j; break; 				// 3 = r1>------->r2
-									case 1: orientation = 0; overlapLen = hashTable->getHashStringLength() + j; break; 		// 0 = r1<-------<r2
-									case 2: orientation = 2; overlapLen = read1Len - j; break; 				// 2 = r1>-------<r2
-									case 3: orientation = 1; overlapLen = hashTable->getHashStringLength() + j; break; 		// 1 = r2<------->r2
+									case 0: orientation = 3; break; 		// 3 = r1>------->r2
+									case 1: orientation = 0; break; 		// 0 = r1<-------<r2
+									case 2: orientation = 2; break; 		// 2 = r1>-------<r2
+									case 3: orientation = 1; break; 		// 1 = r2<------->r2
 								}
 								#pragma omp critical(updateSuperRead)
 								{
@@ -390,14 +390,14 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 							}
 							else if(read1String.length() == read2Len && read1->getReadNumber() < read2->getReadNumber())
 							{
-								UINT64 overlapLen=0;
+								UINT64 overlapLen=read2Len;
 								UINT64 orientation=1;
 								switch (data >> 62) // Most significant 2 bit represents  00 - prefix forward, 01 - suffix forward, 10 -  prefix reverse, 11 -  suffix reverse.
 								{
-									case 0: orientation = 3; overlapLen = read1Len - j; break; 				// 3 = r1>------->r2
-									case 1: orientation = 0; overlapLen = hashTable->getHashStringLength() + j; break; 		// 0 = r1<-------<r2
-									case 2: orientation = 2; overlapLen = read1Len - j; break; 				// 2 = r1>-------<r2
-									case 3: orientation = 1; overlapLen = hashTable->getHashStringLength() + j; break; 		// 1 = r2<------->r2
+									case 0: orientation = 3;  break; 		// 3 = r1>------->r2
+									case 1: orientation = 0;  break; 		// 0 = r1<-------<r2
+									case 2: orientation = 2;  break; 		// 2 = r1>-------<r2
+									case 3: orientation = 1;  break; 		// 1 = r2<------->r2
 								}
 								#pragma omp critical(updateSuperRead)
 								{
@@ -429,7 +429,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 	hashTable->unLockAll();
 	filePointer.close();
 	hashTable->endEpoch();
-	hashTable->clearCache();
+	hashTable->clearHashTableCache();
 	int ctdReads=0;
 
 	//Get contained read count
@@ -630,7 +630,7 @@ bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> 
 	Read *read1 = dataSet->getReadFromID(readNumber); 	// Get the current read read1.
 	string readString="";
 	/*Start global communication epoch*/
-	readString = hashTable->getStringForward(read1->getReadHashOffset(),myProcID); 		// Get the forward string of read1.
+	readString = hashTable->getStringForward(read1,myProcID); 		// Get the forward string of read1.
 	/*End global communication epoch*/
 	string subString;
 	vector<UINT64> insertedEdgeList;
@@ -642,7 +642,8 @@ bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> 
 	for(UINT64 j = 1; j < read1Len-hashTable->getHashStringLength(); j++) // For each proper substring of length getHashStringLength of read1
 	{
 		subString = readString.substr(j,hashTable->getHashStringLength());  // Get the proper substring s of read1.
-		map<UINT64,string> listOfReads = hashTable->getLocalHitList(localReadHits, subString, j); // Search the string in the hash table.
+		map<UINT64,string> listOfReads;
+		hashTable->getLocalHitList(localReadHits, subString, j, listOfReads); // Search the string in the hash table.
 		if(!listOfReads.empty()) // If other reads contain the substring as prefix or suffix
 		{
 			for(map<UINT64,string>::iterator it=listOfReads.begin() ; it!=listOfReads.end(); ++it) // For each read in the list.
