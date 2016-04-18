@@ -22,7 +22,7 @@ enum
 };
 #define BASE_MASK 0x0000000000000003	/* binary: 11 */
 
-#define HASH_CACHE_SIZE 100000000
+#define HASH_CACHE_SIZE 100000
 #define READ_CACHE_SIZE 20000
 
 /**********************************************************************************************************************
@@ -35,7 +35,7 @@ class HashTable{
 		//vector<UINT64> *memoryHashPartitions;		//Gives the first hash index offset stored in the rank addressed by index on this vector
 		vector<UINT64> *memoryDataPartitions;		//Gives the first global data offset stored in the rank addressed by index on this vector
 		vector<UINT64> *memoryReadCount;			//Gives the number of reads stored in the rank addressed by index on this vector
-		map<UINT64, UINT64*> *cachedHashTable;		//Local cache for the hash data table mapped by hash index
+		map<UINT64, std::shared_ptr<UINT64> > *cachedHashTable;		//Local cache for the hash data table mapped by hash index
 		queue<UINT64> *hashQ;						//Queue to maintain the local hash data cache and pop the oldest entry when full
 													//stores hash index
 
@@ -63,9 +63,9 @@ class HashTable{
 		~HashTable();								// Destructor.
 		void createOffsetTable();
 		void insertDataset(Dataset *d, UINT64 minOverlapLength,UINT64 parallelThreadPoolSize,int myid);	// Insert the dataset in the hash table.
-		vector<UINT64*> * setLocalHitList(const string readString, int myid); 			// Get the list of reads that contain subString as prefix or suffix.
+		vector<shared_ptr<UINT64> > setLocalHitList(const string readString, int myid); 			// Get the list of reads that contain subString as prefix or suffix.
 		void deleteLocalHitList(vector<UINT64*> *localReadHits);
-		void getLocalHitList(vector<UINT64*> *localReadHits, string subString, UINT64 subStringIndx, map<UINT64,string> &listOfReads);
+		map<UINT64,string> getLocalHitList(vector<shared_ptr<UINT64> > localReadHits, string subString, UINT64 subStringIndx);
 		UINT64 hashFunction(const string & subString) const; 						// Hash function.
 		UINT64 getHashTableSize(void) const {return hashTableSize;}		// Get the size of the hash table.
 		UINT64 getHashStringLength() const {return hashStringLength;}		// Get the hash string length.
@@ -83,7 +83,7 @@ class HashTable{
 		UINT64 getLocalOffset(UINT64 globalOffset, int myid) const;
 		bool isGlobalOffsetInRange(UINT64 globalOffset, int myid) const;
 		int getOffsetRank(UINT64 globalOffset) const;
-		string toStringMPI(UINT64  *hashDataBlock,UINT64 stringLen,  UINT64 startOffset) const;
+		string toStringMPI(UINT64 *hashDataBlock,UINT64 stringLen,  UINT64 startOffset) const;
 		UINT64 getMemoryReadCount(int myid);
 		UINT64 getMaxMemoryReadCount();
 		UINT64 getMemoryMaxLocalOffset(int rank);
@@ -102,8 +102,8 @@ class HashTable{
 
 		/*cache management*/
 		bool checkCachedHashTable(UINT64 index);
-		bool getCachedHashTable(UINT64 index, UINT64 hash_block_len, UINT64 *cacheBlock);
-		void insertCachedHashTable(UINT64 index, UINT64* loc);
+		bool getCachedHashTable(UINT64 index, UINT64 hash_block_len, shared_ptr<UINT64> &cacheBlock);
+		void insertCachedHashTable(UINT64 index, shared_ptr<UINT64> &cacheBlock);
 		void clearHashTableCache();
 		bool getCachedRead(UINT64 rid, string &readString);
 		void insertCachedRead(UINT64 rid, string readString);

@@ -35,6 +35,7 @@
 #include <mpi.h>
 #include <stdexcept>
 #include <stdint.h>
+#include <memory>
 using namespace std;
 
 typedef unsigned char UINT8;
