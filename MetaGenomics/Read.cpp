@@ -19,6 +19,7 @@ Read::Read(void)
 	readNumber = 0;
 	superReadID = 0;
 	fileIndex=0;
+	containmentChecked=false;
 }
 
 /**********************************************************************************************************************
@@ -29,6 +30,7 @@ Read::Read(UINT64 fIndx)
 	readNumber = 0;
 	superReadID = 0;
 	fileIndex=fIndx;
+	containmentChecked=false;
 }
 
 /**********************************************************************************************************************

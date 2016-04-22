@@ -44,7 +44,7 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 	ofstream filePointer;
 	string fileName = fileNamePrefix+"_ReadIDMap.txt";
 	filePointer.open(fileName.c_str());
-	if(filePointer == NULL)
+	if(!filePointer)
 		MYEXIT("Unable to open file: " + fileName);
 
 	for(UINT64 i = 0; i < pairedEndDatasetFileNames.size(); i++)						// Read the paired-end datasets.
@@ -86,7 +86,7 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 	cout << "Reading dataset: " << datasetNumber << " from file: " << fileName << endl;
 	ifstream myFile;
 	myFile.open (fileName.c_str());
-	if(myFile == NULL)
+	if(!myFile)
 		MYEXIT("Unable to open file: "+fileName)
 	UINT64 goodReads = 0, badReads = 0;
 	vector<string> line;

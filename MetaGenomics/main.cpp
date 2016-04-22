@@ -111,7 +111,14 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 		else if (argumentsList[i] == "-s")
 			startFromUnitigGraph = true;
 		else if (argumentsList[i] == "-t")
+		{
 			maxthreads = atoi(argumentsList[++i].c_str());
+			if(maxthreads<2)
+			{
+				cerr << endl << " -t\tmaximum threads used should at least be 2." << endl;
+				exit(0);
+			}
+		}
 		else if (argumentsList[i] == "-w")
 			writeGraphSize = atoi(argumentsList[++i].c_str());
 		else
@@ -121,8 +128,8 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 			cerr << "  -se\tnumber of files and single-end file names" <<endl; 			// Single-end file name in fasta/fastq format.
 			cerr << "  -f\tAll file name prefix" <<endl; 			// all output file with have this name with different extensions.
 			cerr << "  -l\tminimum overlap length" << endl; 	// Minimum overlap length for two reads to overlap in the overlap graph.
-			cerr << "  -w\tgraph write frequency per" << endl; 	// Maximum size of sub-graph before it's written to disk
-			cerr << "  -t\tmaximum threads used" << endl; 	// Maximum OMP threads used
+			cerr << "  -w\tgraph write frequency per(default: 1000)" << endl; 	// Maximum size of sub-graph before it's written to disk
+			cerr << "  -t\tmaximum threads used(default: 4)" << endl; 	// Maximum OMP threads used
 			cerr << "  -s\tstart from unitig graph" << endl; 	// -s means that the program will build the graph. Otherwise it will load the graph from the unitig graph file.
 			if (argumentsList[i] == "-h" || argumentsList[i] == "--help")
 				exit(0);
