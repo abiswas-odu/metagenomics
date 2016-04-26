@@ -126,10 +126,13 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 
 	vector<bool> * allMarked = new vector<bool>;
 	allMarked->reserve(dataSet->getNumberOfUniqueReads()+1);
-
-	for(UINT64 i = 0; i <= dataSet->getNumberOfUniqueReads(); i++) // Initialization
+	allMarked->push_back(0);
+	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // Initialization
 	{
-		allMarked->push_back(0);
+		if(dataSet->getReadFromID(i)->superReadID==0)
+			allMarked->push_back(0);
+		else
+			allMarked->push_back(1);
 	}
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
