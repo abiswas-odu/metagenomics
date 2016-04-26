@@ -696,7 +696,7 @@ UINT8 OverlapGraph::twinEdgeOrientation(UINT8 orientation)
 **********************************************************************************************************************/
 bool OverlapGraph::saveParGraphToFile(string fileName, map<UINT64,nodeType> * exploredReads,map<UINT64, vector<Edge*> * > *parGraph)
 {
-	CLOCKSTART;
+	//CLOCKSTART;
 	ofstream filePointer;
 	filePointer.open(fileName.c_str(), std::ios_base::app);
 	if(filePointer == NULL)
@@ -808,6 +808,6 @@ bool OverlapGraph::saveParGraphToFile(string fileName, map<UINT64,nodeType> * ex
 			++it;
 	}
 	filePointer.close();
-	CLOCKSTOP;
+	//CLOCKSTOP;
 	return true;
 }
