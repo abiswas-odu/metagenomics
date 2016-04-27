@@ -332,14 +332,14 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 						{
 							if(readString.length() > read2Len)
 							{
-								UINT64 overlapLen=read2Len;
+								UINT64 overlapLen=0;
 								UINT64 orientation=1;
 								switch (data >> 62) // Most significant 2 bit represents  00 - prefix forward, 01 - suffix forward, 10 -  prefix reverse, 11 -  suffix reverse.
 								{
-									case 0: orientation = 3; break; 				// 3 = r1>------->r2
-									case 1: orientation = 0; break; 		// 0 = r1<-------<r2
-									case 2: orientation = 2; break; 				// 2 = r1>-------<r2
-									case 3: orientation = 1; break; 		// 1 = r2<------->r2
+									case 0: orientation = 3; overlapLen = read1Len - j; break; 				// 3 = r1>------->r2
+									case 1: orientation = 0; overlapLen = hashTable->getHashStringLength() + j; break; 		// 0 = r1<-------<r2
+									case 2: orientation = 2; overlapLen = read1Len - j; break; 				// 2 = r1>-------<r2
+									case 3: orientation = 1; overlapLen = hashTable->getHashStringLength() + j; break; 		// 1 = r2<------->r2
 								}
 								#pragma omp critical(updateSuperRead)
 								{
@@ -349,7 +349,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 											read2->superReadID = i;
 									//Write contained read information regardless as it is a super read has been identified
 									filePointer<<read2->getFileIndex()<<"\t"<<read1->getFileIndex()<<"\t"<<orientation<<","
-											<<overlapLen<<","
+											<<read2Len<<","
 											<<"0"<<","<<"0"<<","								//No substitutions or edits
 											<<read2Len<<","					//Cointained Read (len,start,stop)
 											<<"0"<<","
@@ -362,14 +362,14 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 							}
 							else if(readString.length() == read2Len && read1->getReadNumber() < read2->getReadNumber())
 							{
-								UINT64 overlapLen=read2Len;
+								UINT64 overlapLen=0;
 								UINT64 orientation=1;
 								switch (data >> 62) // Most significant 2 bit represents  00 - prefix forward, 01 - suffix forward, 10 -  prefix reverse, 11 -  suffix reverse.
 								{
-									case 0: orientation = 3; break; 				// 3 = r1>------->r2
-									case 1: orientation = 0; break; 		// 0 = r1<-------<r2
-									case 2: orientation = 2; break; 				// 2 = r1>-------<r2
-									case 3: orientation = 1; break; 		// 1 = r2<------->r2
+									case 0: orientation = 3; overlapLen = read1Len - j; break; 				// 3 = r1>------->r2
+									case 1: orientation = 0; overlapLen = hashTable->getHashStringLength() + j; break; 		// 0 = r1<-------<r2
+									case 2: orientation = 2; overlapLen = read1Len - j; break; 				// 2 = r1>-------<r2
+									case 3: orientation = 1; overlapLen = hashTable->getHashStringLength() + j; break; 		// 1 = r2<------->r2
 								}
 								#pragma omp critical(updateSuperRead)
 								{
@@ -380,7 +380,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 
 									//Write duplicate read information regardless as it is a super read has been identified
 									filePointer<<read2->getFileIndex()<<"\t"<<read1->getFileIndex()<<"\t"<<orientation<<","
-											<<overlapLen<<","
+											<<read2Len<<","
 											<<"0"<<","<<"0"<<","								//No substitutions or edits
 											<<read2Len<<","					//Duplicate Read (len,start,stop)
 											<<"0"<<","
