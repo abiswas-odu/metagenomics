@@ -119,7 +119,6 @@ void HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parall
 	{
 		cout<<"Data Part Offset:"<<memoryDataPartitions->at(i)<<" Read Count:"<<memoryReadCount->at(i)<<endl;
 	}
-
 	CLOCKSTOP;
 }
 
@@ -460,7 +459,8 @@ bool HashTable::insertIntoTable(Read *read, string forwardRead, UINT64 *hashData
 	UINT64	readHashOffset = baseOffset+hashDataLengths[index];
 	read->setReadHashOffset(readHashOffset);
 
-	hashDataLengths[index] +=  dna_word + 1;
+	//Update data lengths to maintain global consistency of offset values
+	hashDataLengths[index] +=  (dna_word + 1);
 
 	/*store prefix reverse data*/
 	index = getHashIndex(suffixForward);						// Get the index using the hash function.
@@ -493,8 +493,9 @@ bool HashTable::insertIntoTable(Read *read, string forwardRead, UINT64 *hashData
 				throw std::invalid_argument("invalid DNA base");
 			}
 		}
-		hashDataLengths[index] += dna_word + 1;
 	}
+	//Update data lengths to maintain global consistency of offset values
+	hashDataLengths[index] += dna_word + 1;
 	return true;
 }
 /**********************************************************************************************************************
@@ -537,38 +538,44 @@ vector<UINT64*> * HashTable::setLocalHitList_nocache(const string readString, in
 	vector<UINT64*> *localReadHits;				//AB: store data locally
 	#pragma omp critical(getRemoteData)
 	{
-		UINT64 hashQueryCount = readString.length() - getHashStringLength();
-		localReadHits = new vector<UINT64*>(hashQueryCount);
-		for(UINT64 j = 0; j < readString.length() - getHashStringLength(); j++) // for each substring of read1 of length getHashStringLength
-		{
-			string subString = readString.substr(j,getHashStringLength()); // Get the substring from read string
-			UINT64 index = getHashIndex(subString);	// Get the index using the hash function.
-			//Compute various indices
-			UINT64 globalStartOffset=hashTable[index];
-			UINT64 globalEndOffset= (index==hashTableSize-1)?hashDataTableSize:hashTable[index+1];
-			UINT64 hash_block_len = globalEndOffset-globalStartOffset;
-			localReadHits->at(j)=NULL;
-			if(hash_block_len)
+		try{
+			UINT64 hashQueryCount = readString.length() - getHashStringLength();
+			localReadHits = new vector<UINT64*>(hashQueryCount);
+			for(UINT64 j = 0; j < readString.length() - getHashStringLength(); j++) // for each substring of read1 of length getHashStringLength
 			{
-				int t_rank = getOffsetRank(globalStartOffset);
-				MPI_Aint localOffset = getLocalOffset(globalStartOffset,t_rank);
-				//cout<<"oRank:"<<myid<<", tRank:"<<t_rank<<", len:"<<hash_block_len<<", Offset:"<<localOffset<<endl;
-				//Allocate memory
-				localReadHits->at(j) = new UINT64[hash_block_len];
-				std::memset(localReadHits->at(j), 0, hash_block_len*sizeof(MPI_UINT64_T));
-				// Get data from RMA
-				void *buf = localReadHits->at(j);
-				/*if((localOffset+hash_block_len)>=getMemoryMaxLocalOffset(t_rank))
+				string subString = readString.substr(j,getHashStringLength()); // Get the substring from read string
+				UINT64 index = getHashIndex(subString);	// Get the index using the hash function.
+				//Compute various indices
+				UINT64 globalStartOffset=hashTable[index];
+				UINT64 globalEndOffset= (index==hashTableSize-1)?hashDataTableSize:hashTable[index+1];
+				UINT64 hash_block_len = globalEndOffset-globalStartOffset;
+				localReadHits->at(j)=NULL;
+				if(hash_block_len)
 				{
-					cout<<"Req. Start: oProcess:"<<myid<<" tRank:"<<t_rank<<" GlobalOffset:"<<globalStartOffset<<" LocalOffset"<<localOffset<<" blockLen:"<<hash_block_len<<endl;
-				}*/
-				//MPI_Win_lock(MPI_LOCK_SHARED, t_rank, 0, win);
-				MPI_Get(buf, hash_block_len, MPI_UINT64_T, t_rank, localOffset, hash_block_len, MPI_UINT64_T, win);
-				//MPI_Win_unlock(t_rank, win);
-				rmaCtr++;
+					int t_rank = getOffsetRank(globalStartOffset);
+					MPI_Aint localOffset = getLocalOffset(globalStartOffset,t_rank);
+					//cout<<"oRank:"<<myid<<", tRank:"<<t_rank<<", len:"<<hash_block_len<<", Offset:"<<localOffset<<endl;
+					//Allocate memory
+					localReadHits->at(j) = new UINT64[hash_block_len];
+					std::memset(localReadHits->at(j), 0, hash_block_len*sizeof(MPI_UINT64_T));
+					// Get data from RMA
+					void *buf = localReadHits->at(j);
+					/*if((localOffset+hash_block_len)>=getMemoryMaxLocalOffset(t_rank))
+					{
+						cout<<"Req. Start: oProcess:"<<myid<<" tRank:"<<t_rank<<" GlobalOffset:"<<globalStartOffset<<" LocalOffset"<<localOffset<<" blockLen:"<<hash_block_len<<endl;
+					}*/
+					//MPI_Win_lock(MPI_LOCK_SHARED, t_rank, 0, win);
+					MPI_Get(buf, hash_block_len, MPI_UINT64_T, t_rank, localOffset, hash_block_len, MPI_UINT64_T, win);
+					//MPI_Win_unlock(t_rank, win);
+					rmaCtr++;
+				}
 			}
+			MPI_Win_flush_all(win);
 		}
-		MPI_Win_flush_all(win);
+		catch (const std::bad_alloc&) {
+			cout<<"Proc"<<myid<<" Exception Caught getting read data!!!";
+			exit(0);
+		}
 	}
 	return localReadHits;
 }
@@ -879,17 +886,21 @@ string HashTable::toStringMPI(UINT64 *hashDataBlock,UINT64 stringLen, UINT64 sta
 	}
 	return dna_str;
 }
-UINT64 HashTable::getReadLength(UINT64 globalOffset, int myid) const
+UINT64 HashTable::getReadLength(UINT64 globalOffset, UINT64 readID , int myid) const
 {
 	UINT64 dataRec;
 	dataRec=0;
 	int t_rank = getOffsetRank(globalOffset);
-	UINT64 localOffset = getLocalOffset(globalOffset,t_rank);
-	//MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
+	MPI_Aint localOffset = getLocalOffset(globalOffset,t_rank);
 	MPI_Get(&dataRec, 1, MPI_UINT64_T, t_rank, localOffset, 1, MPI_UINT64_T, win);
 	MPI_Win_flush(t_rank,win);
 	rmaCtr++;
-	//MPI_Win_unlock(rank, win);
+	UINT64 rmaReadID = dataRec & 0X0000FFFFFFFFFFFF;
+	if(readID!=rmaReadID)
+	{
+		cout<<"Proc:"<<myid<<" Error!!! Read ID do not match:"<<readID<<" "<<rmaReadID<<" Goff:"<<globalOffset<<" lOff:"<<localOffset<<" Len:"<<((dataRec >> 48) & 0X0000000000007FFF)<<endl;
+		exit(0);
+	}
 	return ((dataRec >> 48) & 0X0000000000007FFF); 	//2nd MSB to 16th MSB are read length
 	return 0;
 }
@@ -898,6 +909,7 @@ string HashTable::getStringForward(Read *r, int myid)
 {
 	UINT64 globalOffset = r->getReadHashOffset();
 	UINT64 rid = r->getReadNumber();
+	UINT64 fid = r->getFileIndex();
 	UINT64 *dataBlock = NULL;
 	string seq="";
 	#pragma omp critical(getRemoteData)
@@ -905,22 +917,31 @@ string HashTable::getStringForward(Read *r, int myid)
 		//check local cache
 		if(!getCachedRead(rid,seq))
 		{
-			UINT64 stringLen=getReadLength(globalOffset, myid);
+
+			UINT64 stringLen=getReadLength(globalOffset, rid, myid);
 			int t_rank = getOffsetRank(globalOffset);
-			INT64 localOffset = getLocalOffset(globalOffset,t_rank);
+			MPI_Aint localOffset = getLocalOffset(globalOffset,t_rank)+1;
 			UINT64 dna_word_len = (stringLen / 32) + (stringLen % 32 != 0);
 			dataBlock = new UINT64[dna_word_len];
-
-			//MPI_Win_lock(MPI_LOCK_SHARED, rank, 0, win);
-			MPI_Get(dataBlock, dna_word_len, MPI_UINT64_T, t_rank, localOffset+1, dna_word_len, MPI_UINT64_T, win);
-			MPI_Win_flush(t_rank,win);
-			rmaCtr++;
-			//MPI_Win_unlock(rank, win);
-			seq = toStringMPI(dataBlock,stringLen,0);
-			insertCachedRead(rid, seq);
+			std::memset(dataBlock, 0, dna_word_len*sizeof(MPI_UINT64_T));
+			try
+			{
+				//cout<<"Proc"<<myid<<" ReadID:"<<fid<<", trank:"<<t_rank<<", Goffset:"<<globalOffset<<", LOffset:"<<localOffset<<", Len:"<<stringLen<<endl;
+				MPI_Get(dataBlock, dna_word_len, MPI_UINT64_T, t_rank, localOffset, dna_word_len, MPI_UINT64_T, win);
+				MPI_Win_flush(t_rank,win);
+				rmaCtr++;
+				seq = toStringMPI(dataBlock,stringLen,0);
+				insertCachedRead(rid, seq);
+			}
+			catch (const std::bad_alloc&) {
+				cout<<"Proc"<<myid<<" Exception Caught getting read data!!!";
+				//cout<<"ReadID:"<<rid<<", trank:"<<t_rank<<", Goffset:"<<globalOffset<<", LOffset:"<<localOffset<<", Len:"<<stringLen<<endl;
+				exit(0);
+			}
 		}
 	}
-	delete[] dataBlock;
+	if(dataBlock)
+		delete[] dataBlock;
 	return seq;
 }
 

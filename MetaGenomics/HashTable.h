@@ -23,7 +23,7 @@ enum
 #define BASE_MASK 0x0000000000000003	/* binary: 11 */
 
 #define HASH_CACHE_SIZE 100000
-#define READ_CACHE_SIZE 2000
+#define READ_CACHE_SIZE 20000
 
 /**********************************************************************************************************************
 	Class to store hashtable.
@@ -57,7 +57,7 @@ class HashTable{
 		void setHashTableDataSize(int myid);		// Set the size of the hash data table.
 		UINT64 getHashIndex(const string & subString) const;	//Convert a set of data bytes from hash data table to DNA string
 		string toString(UINT64 hashDataIndex,UINT64 stringLen) const;
-		UINT64 getReadLength(UINT64 globalOffset, int myid) const; 		// Get the length of the string in the read at offset. NOT threadsafe
+		UINT64 getReadLength(UINT64 globalOffset, UINT64 readID, int myid) const; 		// Get the length of the string in the read at offset. NOT threadsafe
 	public:
 		HashTable(UINT64 parallelProcessPoolSize);							// Default constructor.
 		~HashTable();								// Destructor.
