@@ -9,7 +9,6 @@ CPP_SRCS += \
 ../../MetaGenomics/HashTable.cpp \
 ../../MetaGenomics/OverlapGraph.cpp \
 ../../MetaGenomics/Read.cpp \
-../../MetaGenomics/dna.cpp \
 ../../MetaGenomics/main.cpp 
 
 OBJS += \
@@ -18,7 +17,6 @@ OBJS += \
 ./MetaGenomics/HashTable.o \
 ./MetaGenomics/OverlapGraph.o \
 ./MetaGenomics/Read.o \
-./MetaGenomics/dna.o \
 ./MetaGenomics/main.o 
 
 CPP_DEPS += \
@@ -27,7 +25,6 @@ CPP_DEPS += \
 ./MetaGenomics/HashTable.d \
 ./MetaGenomics/OverlapGraph.d \
 ./MetaGenomics/Read.d \
-./MetaGenomics/dna.d \
 ./MetaGenomics/main.d 
 
 
