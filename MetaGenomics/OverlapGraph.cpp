@@ -8,7 +8,6 @@
 
 #include "Common.h"
 #include "OverlapGraph.h"
-#include "CS2/cs2.h"
 
 std::vector<std::string> &split(const std::string &s, char delim, std::vector<std::string> &elems) {
 	std::stringstream ss(s);
@@ -246,6 +245,8 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			delete parGraph;
 			delete exploredReads;
 			delete nodeQ;
+			INT64 mem_start = checkMemoryUsage();
+
 			startReadID=0;
 			#pragma omp critical(assignRandomStart)
 			{
@@ -258,6 +259,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					}
 				}
 			}
+			cout<<"Thread:"<<threadID<<" Reads Processed:"<<startReadID<<" Memory Used:" << mem_start << endl;
 		}
 	}
 	delete allMarked;
