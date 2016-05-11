@@ -122,28 +122,27 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	dataSet = ht->getDataset();
 
 	markContainedReads(fnamePrefix);
-
-	vector<bool> * allMarked = new vector<bool>;
-	allMarked->reserve(dataSet->getNumberOfUniqueReads()+1);
-	allMarked->push_back(0);
+	UINT64 nodeCount = dataSet->getNumberOfUniqueReads()+1;
+	unsigned short *allMarked = new unsigned short[nodeCount];
+	allMarked[0]=0;
 	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // Initialization
 	{
 		if(dataSet->getReadFromID(i)->superReadID==0)
-			allMarked->push_back(0);
+			allMarked[i]=0;
 		else
-			allMarked->push_back(1);
+			allMarked[i]=1;
 	}
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
 		UINT64 startReadID=0,prevReadID=0;
 		#pragma omp critical(assignRandomStart)    //Set initial start points...
 		{
-			for(UINT64 i=1;i<allMarked->size();i++)
+			for(UINT64 i=1;i<nodeCount;i++)
 			{
-				if(allMarked->at(i)==0)
+				if(allMarked[i]==0)
 				{
 					startReadID=prevReadID=i;
-					allMarked->at(i)=1;
+					allMarked[i]=1;
 					break;
 				}
 			}
@@ -165,13 +164,12 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					UINT64 read1 = nodeQ->front();										//Pop from queue...
 					nodeQ->pop();
 					bool isPrevMarked=false;
-					#pragma omp critical(assignRandomStart)
-					{
-						if(allMarked->at(read1)==0)
-							allMarked->at(read1)=1;
-						else
-							isPrevMarked=true;
-					}
+
+					if(allMarked[read1]==0)
+						allMarked[read1]=1;
+					else
+						isPrevMarked=true;
+
 					if(!isPrevMarked || read1==startReadID)
 					{
 						if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
@@ -250,16 +248,17 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			startReadID=0;
 			#pragma omp critical(assignRandomStart)
 			{
-				for(UINT64 i=prevReadID;i<allMarked->size();i++)
+				for(UINT64 i=prevReadID;i<nodeCount;i++)
 				{
-					if(allMarked->at(i)==0){
+					if(allMarked[i]==0){
 						startReadID=prevReadID=i;
-						allMarked->at(i)=1;
+						allMarked[i]=1;
 						break;
 					}
 				}
 			}
-			cout<<"Thread:"<<threadID<<" Reads Processed:"<<startReadID<<" Memory Used:" << mem_start << endl;
+			if(startReadID%1000000 == 0)
+				cout<<"Thread:"<<threadID<<" Reads Processed:"<<startReadID<<" Memory Used:" << mem_start << endl;
 		}
 	}
 	delete allMarked;
