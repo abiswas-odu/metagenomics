@@ -257,7 +257,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					}
 				}
 			}
-			if(startReadID%1000000 == 0)
+			if(startReadID%100 == 0)
 				cout<<"Thread:"<<threadID<<" Reads Processed:"<<startReadID<<" Memory Used:" << mem_start << endl;
 		}
 	}
