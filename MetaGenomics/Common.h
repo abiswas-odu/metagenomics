@@ -27,7 +27,6 @@
 #include <map>
 #include <string>
 #include <cstring>
-#include <hash_map>
 #include <queue>
 #include <omp.h>
 #include <cmath>
