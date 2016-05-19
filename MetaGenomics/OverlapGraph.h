@@ -2,7 +2,7 @@
  * OverlapGraph.h
  *
  * Created on: April 22, 2013
- * Author: Md. Bahlul Haider
+ * Author: Md. Bahlul Haider, Abhishek Biswas
  */
 
 
@@ -54,7 +54,7 @@ class OverlapGraph
 	public:
 		bool flowComputed;											// Flag to check wheather the flow is computed or not.
 		OverlapGraph(void);											// Default constructor.
-		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph, UINT64 maxMemSizeGB, string fnamePrefix);								// Another constructor.
+		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph, string fnamePrefix);								// Another constructor.
 		~OverlapGraph();											// Destructor.
 		bool markTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph); // Mark transitive edges of a read.
 		bool buildOverlapGraphFromHashTable(HashTable *ht, string fnamePrefix);			// Build the overlap graph using hashtable.

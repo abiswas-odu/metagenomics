@@ -86,7 +86,7 @@ OverlapGraph::OverlapGraph(void)
 BNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMM
 
 **********************************************************************************************************************/
-OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph, UINT64 maxMemSizeGB,string fnamePrefix)
+OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph, string fnamePrefix)
 {
 	// Initialize the variables.
 	estimatedGenomeSize = 0;
@@ -95,8 +95,6 @@ OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph, 
 	flowComputed = false;
 	parallelThreadPoolSize=maxThreads;
 	writeParGraphSize=maxParGraph;
-	maxMemMB=maxMemSizeGB*1024;
-	maxMemMB = maxMemMB*0.9;
 	buildOverlapGraphFromHashTable(ht,fnamePrefix);
 }
 
@@ -158,7 +156,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			vector<Edge *> *newList = new vector<Edge *>;
 			parGraph->insert( std::pair<UINT64, vector<Edge*> * >(startReadID, newList)); // Insert start node
 			UINT64 writtenMakedNodes=0;
-			int threadID = omp_get_thread_num();
 			if(exploredReads->find(startReadID) ==  exploredReads->end()) //if node is UNEXPLORED
 			{
 				nodeQ->push(startReadID);  											// // Initialize queue start and end.
@@ -224,14 +221,17 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 							}
 						}
 					}
-					if(writtenMakedNodes>MAX_PAR_GRAPH_SIZE)
+					if(writtenMakedNodes>writeParGraphSize)
 					{
 						int threadID = omp_get_thread_num();
 						saveParGraphToFile(fnamePrefix + "_" + SSTR(threadID) + "_parGraph.txt" , exploredReads, parGraph);
+						UINT64 mem_used = checkMemoryUsage();
+						cout<<"Thread:"<<threadID<<" Reads Processed:"<<startReadID<<" Memory Used:" << mem_used << endl;
 						writtenMakedNodes=0;
 					}
 				}
 			}
+			int threadID = omp_get_thread_num();
 			saveParGraphToFile(fnamePrefix + "_" + SSTR(threadID) + "_parGraph.txt" , exploredReads, parGraph);
 			for (map<UINT64, vector<Edge*> * >::iterator it=parGraph->begin(); it!=parGraph->end();it++)
 			{
@@ -257,8 +257,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					}
 				}
 			}
-			INT64 mem_used = checkMemoryUsage();
-			cout<<"Thread:"<<threadID<<" Reads Processed:"<<startReadID<<" Memory Used:" << mem_used << endl;
 		}
 	}
 	delete allMarked;
@@ -284,13 +282,18 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 		ifstream filePointer;
 		filePointer.open(containedReadFile.c_str());
 		string text;
+		UINT64 readsProcessed=0;
 		while(getline(filePointer,text))
 		{
+			readsProcessed++;
 			vector<string> toks = splitTok(text,'\t');
 			UINT64 containedReadID = atoi(toks[0].c_str());
 			UINT64 containingReadID = atoi(toks[1].c_str());
 			Read *r = dataSet->getReadFromFileIndex(containedReadID); // Get the read
 			r->superReadID=containingReadID;
+
+			if(readsProcessed%1000000==0)
+				cout<<"# Contained Reads Loaded:"<< readsProcessed << endl;
 		}
 	    filePointer.close();
 	}

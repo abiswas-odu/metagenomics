@@ -3,7 +3,7 @@
  *
  * Created on: April 22, 2013
  * Author: Md. Bahlul Haider, Abhishek Biswas
- * Version: 0.1 (Alpha)
+ * Version: 3.o
  */
 
 
@@ -33,7 +33,7 @@ int main(int argc, char **argv)
 	OverlapGraph *overlapGraph;
 	HashTable *hashTable=new HashTable();
 	hashTable->insertDataset(dataSet, minimumOverlapLength,maxThreads);
-	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,maxMemSizeGB,allFileName); //hashTable deleted by this function after building the graph also writes graph
+	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName); //hashTable deleted by this function after building the graph also writes graph
 	delete dataSet;
 	delete overlapGraph;
 	CLOCKSTOP;
