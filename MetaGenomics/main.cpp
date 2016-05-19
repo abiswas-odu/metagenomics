@@ -14,7 +14,7 @@
 #include "Edge.h"
 #include "OverlapGraph.h"
 
-void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, vector<string> & singleEndFileNames,string & allFileName, UINT64 & minimumOverlapLength, bool & startFromUnitigGraph, UINT64 & maxThreads, UINT64 & writeGraphSize);
+void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, vector<string> & singleEndFileNames,string & allFileName, UINT64 & minimumOverlapLength, bool & startFromUnitigGraph, UINT64 & maxThreads, UINT64 & writeGraphSize, UINT64 &maxMemSizeGB);
 
 int main(int argc, char **argv)
 {
@@ -25,12 +25,15 @@ int main(int argc, char **argv)
 	bool startFromUnitigGraph = false;
 	UINT64 maxThreads = DEF_THREAD_COUNT;
 	UINT64 writeGraphSize = MAX_PAR_GRAPH_SIZE;
-	parseArguments(argc, argv, pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength, startFromUnitigGraph, maxThreads, writeGraphSize);
+	UINT64 maxMemSizeGB = getMaxMemory();
+	cout<<"Max available memory: "<<maxMemSizeGB<< " GB"<<endl;
+	parseArguments(argc, argv, pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength, startFromUnitigGraph, maxThreads, writeGraphSize,maxMemSizeGB);
+	cout<<"Max usable memory: "<<maxMemSizeGB<< " GB"<<endl;
 	Dataset *dataSet = new Dataset(pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength);
 	OverlapGraph *overlapGraph;
 	HashTable *hashTable=new HashTable();
 	hashTable->insertDataset(dataSet, minimumOverlapLength,maxThreads);
-	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName); //hashTable deleted by this function after building the graph also writes graph
+	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,maxMemSizeGB,allFileName); //hashTable deleted by this function after building the graph also writes graph
 	delete dataSet;
 	delete overlapGraph;
 	CLOCKSTOP;
@@ -40,7 +43,7 @@ int main(int argc, char **argv)
 	Parse the input arguments
 **********************************************************************************************************************/
 
-void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, vector<string> & singleEndFileNames, string & allFileName, UINT64 & minimumOverlapLength, bool & startFromUnitigGraph, UINT64 & maxthreads, UINT64 & writeGraphSize)
+void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, vector<string> & singleEndFileNames, string & allFileName, UINT64 & minimumOverlapLength, bool & startFromUnitigGraph, UINT64 & maxthreads, UINT64 & writeGraphSize, UINT64 &maxMemSizeGB)
 {
 	allFileName = "";
 	minimumOverlapLength = 0;
@@ -64,6 +67,7 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 		cerr << "  -l\tminimum overlap length" << endl; 	// Minimum overlap length for two reads to overlap in the overlap graph.
 		cerr << "  -t\tmaximum threads used" << endl; 	// Maximum OMP threads used
 		cerr << "  -w\tgraph write frequency per" << endl; 	// Maximum size of sub-graph before its written to disk
+		cerr << "  -m\tmaximum memory usage allowed" << endl; 	// Maximum memory to be used before written to disk
 		cerr << "  -s\tstart from unitig graph" << endl; 	// -s means that the program will build the graph. Otherwise it will load the graph from the unitig graph file.
 			exit(0);
 	}
@@ -96,6 +100,8 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 			maxthreads = atoi(argumentsList[++i].c_str());
 		else if (argumentsList[i] == "-w")
 			writeGraphSize = atoi(argumentsList[++i].c_str());
+		else if (argumentsList[i] == "-m")
+			maxMemSizeGB = atoi(argumentsList[++i].c_str());
 		else
 		{
 			cerr << endl << "Usage: MetaGenomics [OPTION]...[PRARAM]..." << endl;
@@ -105,6 +111,7 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 			cerr << "  -l\tminimum overlap length" << endl; 	// Minimum overlap length for two reads to overlap in the overlap graph.
 			cerr << "  -w\tgraph write frequency per" << endl; 	// Maximum size of sub-graph before it's written to disk
 			cerr << "  -t\tmaximum threads used" << endl; 	// Maximum OMP threads used
+			cerr << "  -m\tmaximum memory usage allowed" << endl; 	// Maximum memory to be used before written to disk
 			cerr << "  -s\tstart from unitig graph" << endl; 	// -s means that the program will build the graph. Otherwise it will load the graph from the unitig graph file.
 			if (argumentsList[i] == "-h" || argumentsList[i] == "--help")
 				exit(0);

@@ -92,6 +92,29 @@ inline unsigned int checkMemoryUsage()
     return (count/1024);
 };
 
+// Get the maximum memory of the machine.
+inline unsigned int getMaxMemory()
+{
+    // get KB memory into count
+    unsigned int count=0;
+
+    #if defined(__linux__)
+    ifstream f("/proc/meminfo"); // read the linux file
+    while(!f.eof()){
+        string key;
+        f>>key;
+        if(key=="MemTotal:"){     // size of data
+            f>>count;
+        break;
+        }
+    }
+    f.close();
+    #endif
+
+    // return GBs memory (size of data)
+    return (count/(1024*1024));
+};
+
 
 inline void str_reverse( char *str ) {
     char *str_end = strchr( str, 0 );
