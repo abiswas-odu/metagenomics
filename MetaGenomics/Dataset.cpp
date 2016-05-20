@@ -243,9 +243,10 @@ Read * Dataset::getReadFromFileIndex(UINT64 fID)
 	size_t i = fID<reads->size()?fID:reads->size();
 	for(;i>0;i--)
 	{
-		if(getReadFromID(i)->getFileIndex()==fID)
+		Read *r = getReadFromID(i);
+		if(r->getFileIndex()==fID)
 		{
-			readID = reads->at(i)->getReadNumber();
+			readID = r->getReadNumber();
 			break;
 		}
 	}

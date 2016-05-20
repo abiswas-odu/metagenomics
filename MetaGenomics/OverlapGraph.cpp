@@ -86,7 +86,7 @@ OverlapGraph::OverlapGraph(void)
 BNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMM
 
 **********************************************************************************************************************/
-OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph, string fnamePrefix)
+OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph,UINT64 maxMemSizeGB, string fnamePrefix)
 {
 	// Initialize the variables.
 	estimatedGenomeSize = 0;
@@ -94,7 +94,21 @@ OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph, 
 	numberOfEdges = 0;
 	flowComputed = false;
 	parallelThreadPoolSize=maxThreads;
-	writeParGraphSize=maxParGraph;
+
+	UINT64 mem_used = checkMemoryUsage();
+	UINT64 maxMemSizeMB = maxMemSizeGB*1024;
+	INT64 memPerThdMB = (maxMemSizeMB-mem_used)/parallelThreadPoolSize;
+
+	if(memPerThdMB<=0)
+		MYEXIT("Error!!! User did not provide enough memory for graph construction.");
+
+	if(memPerThdMB>10000)						//More than 10GB per thread available
+		writeParGraphSize=MAX_PAR_GRAPH_SIZE;
+	else if(memPerThdMB>5000 && memPerThdMB<10000)  	// 5 - 10GB per thread available
+		writeParGraphSize=MID_PAR_GRAPH_SIZE;
+	else
+		writeParGraphSize=MIN_PAR_GRAPH_SIZE;		// less than 5GB per thread available
+
 	buildOverlapGraphFromHashTable(ht,fnamePrefix);
 }
 
@@ -122,31 +136,32 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	dataSet = ht->getDataset();
 
 	markContainedReads(fnamePrefix);
-	UINT64 nodeCount = dataSet->getNumberOfUniqueReads()+1;
-	unsigned short *allMarked = new unsigned short[nodeCount];
-	allMarked[0]=0;
+	vector<bool> * allMarked = new vector<bool>;
+	allMarked->reserve(dataSet->getNumberOfUniqueReads()+1);
+	allMarked->push_back(0);
 	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // Initialization
 	{
 		if(dataSet->getReadFromID(i)->superReadID==0)
-			allMarked[i]=0;
+			allMarked->push_back(0);
 		else
-			allMarked[i]=1;
+			allMarked->push_back(1);
 	}
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
 		UINT64 startReadID=0,prevReadID=0;
 		#pragma omp critical(assignRandomStart)    //Set initial start points...
 		{
-			for(UINT64 i=1;i<nodeCount;i++)
+			for(UINT64 i=1;i<allMarked->size();i++)
 			{
-				if(allMarked[i]==0)
+				if(allMarked->at(i)==0)
 				{
 					startReadID=prevReadID=i;
-					allMarked[i]=1;
+					allMarked->at(i)=1;
 					break;
 				}
 			}
 		}
+		int threadID = omp_get_thread_num();
 		while(startReadID!=0) // Loop till all nodes marked
 		{
 			map<UINT64,nodeType> *exploredReads = new map<UINT64,nodeType>;							//Record of nodes processed
@@ -159,17 +174,18 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			if(exploredReads->find(startReadID) ==  exploredReads->end()) //if node is UNEXPLORED
 			{
 				nodeQ->push(startReadID);  											// // Initialize queue start and end.
-				while(!nodeQ->empty()) 													// This loop will explore all connected component starting from read startReadID.
+				while(!nodeQ->empty() && writtenMakedNodes<writeParGraphSize) 													// This loop will explore all connected component starting from read startReadID.
 				{
 					UINT64 read1 = nodeQ->front();										//Pop from queue...
 					nodeQ->pop();
 					bool isPrevMarked=false;
-
-					if(allMarked[read1]==0)
-						allMarked[read1]=1;
-					else
-						isPrevMarked=true;
-
+					#pragma omp critical(assignRandomStart)
+					{
+						if(allMarked->at(read1)==0)
+							allMarked->at(read1)=1;
+						else
+							isPrevMarked=true;
+					}
 					if(!isPrevMarked || read1==startReadID)
 					{
 						if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
@@ -221,17 +237,17 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 							}
 						}
 					}
-					if(writtenMakedNodes>writeParGraphSize)
+					/*if(writtenMakedNodes>MAX_PAR_GRAPH_SIZE)
 					{
-						int threadID = omp_get_thread_num();
 						saveParGraphToFile(fnamePrefix + "_" + SSTR(threadID) + "_parGraph.txt" , exploredReads, parGraph);
-						UINT64 mem_used = checkMemoryUsage();
-						cout<<"Thread:"<<threadID<<" Reads Processed:"<<startReadID<<" Memory Used:" << mem_used << endl;
 						writtenMakedNodes=0;
-					}
+						INT64 mem_used = checkMemoryUsage();
+						cout<<"Thread:"<<threadID<<" Reads Processed:"<<read1<<" Memory Used:" << mem_used << endl;
+					}*/
 				}
 			}
-			int threadID = omp_get_thread_num();
+			INT64 mem_used = checkMemoryUsage();
+			cout<<"Thread:"<<threadID<<" Start Read ID:"<<startReadID<<" Reads Processed:"<<writtenMakedNodes<<" Memory Used:" << mem_used << endl;
 			saveParGraphToFile(fnamePrefix + "_" + SSTR(threadID) + "_parGraph.txt" , exploredReads, parGraph);
 			for (map<UINT64, vector<Edge*> * >::iterator it=parGraph->begin(); it!=parGraph->end();it++)
 			{
@@ -248,11 +264,11 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			startReadID=0;
 			#pragma omp critical(assignRandomStart)
 			{
-				for(UINT64 i=prevReadID;i<nodeCount;i++)
+				for(UINT64 i=prevReadID;i<allMarked->size();i++)
 				{
-					if(allMarked[i]==0){
+					if(allMarked->at(i)==0){
 						startReadID=prevReadID=i;
-						allMarked[i]=1;
+						allMarked->at(i)=1;
 						break;
 					}
 				}
@@ -278,24 +294,29 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 	string containedReadFile = fnamePrefix+"_containedReads.txt";
 	if(ifstream(containedReadFile.c_str()))
 	{
-		cout << "Contained read file already exists. Using this file." <<endl;
-		ifstream filePointer;
-		filePointer.open(containedReadFile.c_str());
-		string text;
-		UINT64 readsProcessed=0;
-		while(getline(filePointer,text))
+		#pragma omp parallel num_threads(parallelThreadPoolSize)
 		{
-			readsProcessed++;
-			vector<string> toks = splitTok(text,'\t');
-			UINT64 containedReadID = atoi(toks[0].c_str());
-			UINT64 containingReadID = atoi(toks[1].c_str());
-			Read *r = dataSet->getReadFromFileIndex(containedReadID); // Get the read
-			r->superReadID=containingReadID;
-
-			if(readsProcessed%1000000==0)
-				cout<<"# Contained Reads Loaded:"<< readsProcessed << endl;
+			#pragma omp single
+			{
+				cout << "Contained read file already exists. Using this file." <<endl;
+				ifstream filePointer;
+				filePointer.open(containedReadFile.c_str());
+				string text;
+				while(getline(filePointer,text))
+				{
+					#pragma omp task firstprivate(text)
+					{
+						vector<string> toks = splitTok(text,'\t');
+						UINT64 containedReadID = atoi(toks[0].c_str());
+						UINT64 containingReadID = atoi(toks[1].c_str());
+						Read *r = dataSet->getReadFromFileIndex(containedReadID); // Get the read
+						r->superReadID=containingReadID;
+					}
+				}
+				#pragma omp taskwait
+				filePointer.close();
+			}
 		}
-	    filePointer.close();
 	}
 	else
 	{

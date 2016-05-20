@@ -24,7 +24,7 @@ int main(int argc, char **argv)
 	string allFileName;
 	bool startFromUnitigGraph = false;
 	UINT64 maxThreads = DEF_THREAD_COUNT;
-	UINT64 writeGraphSize = MAX_PAR_GRAPH_SIZE;
+	UINT64 writeGraphSize = MID_PAR_GRAPH_SIZE;
 	UINT64 maxMemSizeGB = getMaxMemory();
 	cout<<"Max available memory: "<<maxMemSizeGB<< " GB"<<endl;
 	parseArguments(argc, argv, pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength, startFromUnitigGraph, maxThreads, writeGraphSize,maxMemSizeGB);
@@ -33,7 +33,7 @@ int main(int argc, char **argv)
 	OverlapGraph *overlapGraph;
 	HashTable *hashTable=new HashTable();
 	hashTable->insertDataset(dataSet, minimumOverlapLength,maxThreads);
-	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,allFileName); //hashTable deleted by this function after building the graph also writes graph
+	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,maxMemSizeGB,allFileName); //hashTable deleted by this function after building the graph also writes graph
 	delete dataSet;
 	delete overlapGraph;
 	CLOCKSTOP;

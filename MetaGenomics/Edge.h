@@ -17,11 +17,6 @@ class Edge{
 	private:
 		Read *source; 							// Source read u
 		Read *destination; 						// Destination read v
-		UINT8 overlapOrientation;				// Orientation of overlap
-												// 0 = u<-----------<v
-												// 1 = u<----------->v
-												// 2 = u>-----------<v
-												// 3 = u>----------->v
 		UINT64 overlapOffset;					// Length of the overlap.
 												// overlap offset in the following example is 6
 												// 	  012345678901234567890123456789
@@ -32,6 +27,11 @@ class Edge{
 												// Edge (u,v) is present in the list of edges of node u
 												// Edge (v,u) is present in the list of edges of node v.
 												// Edge (u,v) and (v,u) are called twin edge and are reverse of one another.
+		UINT8 overlapOrientation;				// Orientation of overlap
+														// 0 = u<-----------<v
+														// 1 = u<----------->v
+														// 2 = u>-----------<v
+														// 3 = u>----------->v
 	public:
 		bool transitiveRemovalFlag;							// Used to mark transitive edges.
 		Edge(void);								// Default constructor.
