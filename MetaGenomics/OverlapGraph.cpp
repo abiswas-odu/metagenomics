@@ -139,7 +139,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	vector<bool> * allMarked = new vector<bool>;
 	allMarked->reserve(dataSet->getNumberOfUniqueReads()+1);
 	allMarked->push_back(0);
-	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // Initialization
+	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // Initialization; Marked contained reads are considered processed...
 	{
 		if(dataSet->getReadFromID(i)->superReadID==0)
 			allMarked->push_back(0);
@@ -179,13 +179,13 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					UINT64 read1 = nodeQ->front();										//Pop from queue...
 					nodeQ->pop();
 					bool isPrevMarked=false;
-					#pragma omp critical(assignRandomStart)
-					{
+					//#pragma omp critical(assignRandomStart)
+					//{
 						if(allMarked->at(read1)==0)
 							allMarked->at(read1)=1;
 						else
 							isPrevMarked=true;
-					}
+					//}
 					if(!isPrevMarked || read1==startReadID)
 					{
 						if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
@@ -262,8 +262,8 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			delete exploredReads;
 			delete nodeQ;
 			startReadID=0;
-			#pragma omp critical(assignRandomStart)
-			{
+			//#pragma omp critical(assignRandomStart)
+			//{
 				for(UINT64 i=prevReadID;i<allMarked->size();i++)
 				{
 					if(allMarked->at(i)==0){
@@ -272,7 +272,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 						break;
 					}
 				}
-			}
+			//}
 		}
 	}
 	delete allMarked;
@@ -302,8 +302,10 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 				ifstream filePointer;
 				filePointer.open(containedReadFile.c_str());
 				string text;
+				UINT64 procCtr=0;
 				while(getline(filePointer,text))
 				{
+					procCtr++;
 					#pragma omp task firstprivate(text)
 					{
 						vector<string> toks = splitTok(text,'\t');
@@ -312,6 +314,8 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 						Read *r = dataSet->getReadFromFileIndex(containedReadID); // Get the read
 						r->superReadID=containingReadID;
 					}
+					if(procCtr%1000000==0)
+						cout<<procCtr<<" contained reads processed..."<<endl;
 				}
 				#pragma omp taskwait
 				filePointer.close();

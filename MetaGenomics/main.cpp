@@ -50,7 +50,7 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 	startFromUnitigGraph = false;
 	vector<string> argumentsList;
 	cout << "PRINTING ARGUMENTS" << endl;
-	for(UINT64 i = 0; i < argc; i++)
+	for(int i = 0; i < argc; i++)
 	{
 		cout << argv[i] << ' ';
 	}

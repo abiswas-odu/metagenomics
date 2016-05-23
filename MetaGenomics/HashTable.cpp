@@ -2,7 +2,7 @@
  * HashTable.cpp
  *
  *  Created on: Apr 22, 2013
- *      Author: b72
+ *      Author: b72, Abhishek Biswas
  */
 
 
@@ -55,7 +55,6 @@ bool HashTable::insertDataset(Dataset* d, UINT64 minOverlapLength, UINT64 parall
 	numberOfHashCollision = 0;
 	UINT64 size = getPrimeLargerThanNumber(d->getNumberOfUniqueReads() * 8 + 1);  // Size should be at least twice the number of entries in the hash table to reduce hash collision.
 	setHashTableSize(size);
-	UINT64 noOfReads=d->getNumberOfUniqueReads();
 
 	populateReadLengths(); 				//Each hash entry is populated with the length of it's record
 
