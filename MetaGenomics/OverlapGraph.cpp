@@ -136,27 +136,27 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	dataSet = ht->getDataset();
 
 	markContainedReads(fnamePrefix);
-	vector<bool> * allMarked = new vector<bool>;
-	allMarked->reserve(dataSet->getNumberOfUniqueReads()+1);
-	allMarked->push_back(0);
+	UINT64 numNodes = dataSet->getNumberOfUniqueReads()+1;
+	bool * allMarked = new bool[numNodes];
+	allMarked[0]=0;
 	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // Initialization; Marked contained reads are considered processed...
 	{
 		if(dataSet->getReadFromID(i)->superReadID==0)
-			allMarked->push_back(0);
+			allMarked[i]=0;
 		else
-			allMarked->push_back(1);
+			allMarked[i]=1;
 	}
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
 		UINT64 startReadID=0,prevReadID=0;
 		#pragma omp critical(assignRandomStart)    //Set initial start points...
 		{
-			for(UINT64 i=1;i<allMarked->size();i++)
+			for(UINT64 i=1;i<numNodes;i++)
 			{
-				if(allMarked->at(i)==0)
+				if(allMarked[i]==0)
 				{
 					startReadID=prevReadID=i;
-					allMarked->at(i)=1;
+					allMarked[i]=1;
 					break;
 				}
 			}
@@ -171,79 +171,66 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			vector<Edge *> *newList = new vector<Edge *>;
 			parGraph->insert( std::pair<UINT64, vector<Edge*> * >(startReadID, newList)); // Insert start node
 			UINT64 writtenMakedNodes=0;
-			if(exploredReads->find(startReadID) ==  exploredReads->end()) //if node is UNEXPLORED
+			nodeQ->push(startReadID);  											// // Initialize queue start and end.
+			while(!nodeQ->empty() && writtenMakedNodes<writeParGraphSize) 													// This loop will explore all connected component starting from read startReadID.
 			{
-				nodeQ->push(startReadID);  											// // Initialize queue start and end.
-				while(!nodeQ->empty() && writtenMakedNodes<writeParGraphSize) 													// This loop will explore all connected component starting from read startReadID.
+				UINT64 read1 = nodeQ->front();										//Pop from queue...
+				nodeQ->pop();
+				bool isPrevMarked=false;
+				if(allMarked[read1]==0)
+					allMarked[read1]=1;
+				else
+					isPrevMarked=true;
+				if(!isPrevMarked)
 				{
-					UINT64 read1 = nodeQ->front();										//Pop from queue...
-					nodeQ->pop();
-					bool isPrevMarked=false;
-					//#pragma omp critical(assignRandomStart)
-					//{
-						if(allMarked->at(read1)==0)
-							allMarked->at(read1)=1;
-						else
-							isPrevMarked=true;
-					//}
-					if(!isPrevMarked || read1==startReadID)
+					if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
 					{
-						if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
+						insertAllEdgesOfRead(read1, exploredReads, parGraph);					// Explore current node.
+						exploredReads->insert( std::pair<UINT64,nodeType>(read1,EXPLORED) );
+					}
+					if(parGraph->at(read1)->size() != 0) 								// Read has some edges (required only for the first read when a new queue starts.
+					{
+						if(exploredReads->at(read1) == EXPLORED) 					// Explore unexplored neighbors first.
 						{
-							insertAllEdgesOfRead(read1, exploredReads, parGraph);					// Explore current node.
-							exploredReads->insert( std::pair<UINT64,nodeType>(read1,EXPLORED) );
+							for(UINT64 index1 = 0; index1 < parGraph->at(read1)->size(); index1++ )
+							{
+								UINT64 read2 = parGraph->at(read1)->at(index1)->getDestinationRead()->getReadNumber();
+								if(exploredReads->find(read2) ==  exploredReads->end()) 			// Not explored.
+								{
+									nodeQ->push(read2);  						// Put in the queue.
+									insertAllEdgesOfRead(read2, exploredReads, parGraph);
+									exploredReads->insert( std::pair<UINT64,nodeType>(read2,EXPLORED) );
+								}
+							}
+							markTransitiveEdges(read1, parGraph); // Mark transitive edges
+							exploredReads->at(read1) = EXPLORED_AND_TRANSITIVE_EDGES_MARKED;
 						}
-						if(parGraph->at(read1)->size() != 0) 								// Read has some edges (required only for the first read when a new queue starts.
+						if(exploredReads->at(read1) == EXPLORED_AND_TRANSITIVE_EDGES_MARKED)
 						{
-							if(exploredReads->at(read1) == EXPLORED) 					// Explore unexplored neighbors first.
+							for(UINT64 index1 = 0; index1 < parGraph->at(read1)->size(); index1++) 				// Then explore all neighbour's neighbors
 							{
-								for(UINT64 index1 = 0; index1 < parGraph->at(read1)->size(); index1++ )
+								UINT64 read2 = parGraph->at(read1)->at(index1)->getDestinationRead()->getReadNumber();
+								if(exploredReads->at(read2) == EXPLORED)
 								{
-									UINT64 read2 = parGraph->at(read1)->at(index1)->getDestinationRead()->getReadNumber();
-									if(exploredReads->find(read2) ==  exploredReads->end()) 			// Not explored.
+									for(UINT64 index2 = 0; index2 < parGraph->at(read2)->size(); index2++) 		// Explore all neighbors neighbors
 									{
-										nodeQ->push(read2);  						// Put in the queue.
-										insertAllEdgesOfRead(read2, exploredReads, parGraph);
-										exploredReads->insert( std::pair<UINT64,nodeType>(read2,EXPLORED) );
-									}
-								}
-								markTransitiveEdges(read1, parGraph); // Mark transitive edges
-								exploredReads->at(read1) = EXPLORED_AND_TRANSITIVE_EDGES_MARKED;
-							}
-							if(exploredReads->at(read1) == EXPLORED_AND_TRANSITIVE_EDGES_MARKED)
-							{
-								for(UINT64 index1 = 0; index1 < parGraph->at(read1)->size(); index1++) 				// Then explore all neighbour's neighbors
-								{
-									UINT64 read2 = parGraph->at(read1)->at(index1)->getDestinationRead()->getReadNumber();
-									if(exploredReads->at(read2) == EXPLORED)
-									{
-										for(UINT64 index2 = 0; index2 < parGraph->at(read2)->size(); index2++) 		// Explore all neighbors neighbors
+										UINT64 read3 = parGraph->at(read2)->at(index2)->getDestinationRead()->getReadNumber();
+										if(exploredReads->find(read3) ==  exploredReads->end()) 				// Not explored
 										{
-											UINT64 read3 = parGraph->at(read2)->at(index2)->getDestinationRead()->getReadNumber();
-											if(exploredReads->find(read3) ==  exploredReads->end()) 				// Not explored
-											{
-												nodeQ->push(read3);  					// Put in the queue
-												insertAllEdgesOfRead(read3, exploredReads, parGraph);
-												exploredReads->insert( std::pair<UINT64,nodeType>(read3,EXPLORED) );
-											}
+											nodeQ->push(read3);  					// Put in the queue
+											insertAllEdgesOfRead(read3, exploredReads, parGraph);
+											exploredReads->insert( std::pair<UINT64,nodeType>(read3,EXPLORED) );
 										}
-										markTransitiveEdges(read2, parGraph); // Mark transitive edge
-										exploredReads->at(read2) = EXPLORED_AND_TRANSITIVE_EDGES_MARKED;
 									}
+									markTransitiveEdges(read2, parGraph); // Mark transitive edge
+									exploredReads->at(read2) = EXPLORED_AND_TRANSITIVE_EDGES_MARKED;
 								}
-								removeTransitiveEdges(read1, parGraph); // Remove the transitive edges
-								exploredReads->at(read1) = EXPLORED_AND_TRANSITIVE_EDGES_REMOVED;
-								writtenMakedNodes++;
 							}
+							removeTransitiveEdges(read1, parGraph); // Remove the transitive edges
+							exploredReads->at(read1) = EXPLORED_AND_TRANSITIVE_EDGES_REMOVED;
+							writtenMakedNodes++;
 						}
 					}
-					/*if(writtenMakedNodes>MAX_PAR_GRAPH_SIZE)
-					{
-						saveParGraphToFile(fnamePrefix + "_" + SSTR(threadID) + "_parGraph.txt" , exploredReads, parGraph);
-						writtenMakedNodes=0;
-						INT64 mem_used = checkMemoryUsage();
-						cout<<"Thread:"<<threadID<<" Reads Processed:"<<read1<<" Memory Used:" << mem_used << endl;
-					}*/
 				}
 			}
 			INT64 mem_used = checkMemoryUsage();
@@ -262,17 +249,14 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			delete exploredReads;
 			delete nodeQ;
 			startReadID=0;
-			//#pragma omp critical(assignRandomStart)
-			//{
-				for(UINT64 i=prevReadID;i<allMarked->size();i++)
-				{
-					if(allMarked->at(i)==0){
-						startReadID=prevReadID=i;
-						allMarked->at(i)=1;
-						break;
-					}
+			for(UINT64 i=prevReadID;i<numNodes;i++)
+			{
+				if(allMarked[i]==0){
+					startReadID=prevReadID=i;
+					allMarked[i]=1;
+					break;
 				}
-			//}
+			}
 		}
 	}
 	delete allMarked;
