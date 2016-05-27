@@ -184,7 +184,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					else
 						isPrevMarked=true;
 				//}
-				if(!isPrevMarked || read1!=startReadID)
+				if(!isPrevMarked || read1==startReadID)
 				{
 					if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
 					{
