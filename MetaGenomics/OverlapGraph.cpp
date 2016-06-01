@@ -177,13 +177,10 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				UINT64 read1 = nodeQ->front();										//Pop from queue...
 				nodeQ->pop();
 				bool isPrevMarked=false;
-				//#pragma omp critical(assignRandomStart)
-				//{
-					if(allMarked[read1]==0)
-						allMarked[read1]=1;
-					else
-						isPrevMarked=true;
-				//}
+				if(allMarked[read1]==0)
+					allMarked[read1]=1;
+				else
+					isPrevMarked=true;
 				if(!isPrevMarked || read1==startReadID)
 				{
 					if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
@@ -252,17 +249,14 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			delete exploredReads;
 			delete nodeQ;
 			startReadID=0;
-			//#pragma omp critical(assignRandomStart)
-			//{
-				for(UINT64 i=prevReadID;i<numNodes;i++)
-				{
-					if(allMarked[i]==0){
-						startReadID=prevReadID=i;
-						allMarked[i]=1;
-						break;
-					}
+			for(UINT64 i=prevReadID;i<numNodes;i++)
+			{
+				if(allMarked[i]==0){
+					startReadID=prevReadID=i;
+					allMarked[i]=1;
+					break;
 				}
-			//}
+			}
 		}
 	}
 	delete[] allMarked;
