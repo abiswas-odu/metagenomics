@@ -252,12 +252,15 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			delete exploredReads;
 			delete nodeQ;
 			startReadID=0;
-			for(UINT64 i=prevReadID;i<numNodes;i++)
+			#pragma omp critical(assignRandomStart)
 			{
-				if(allMarked[i]==0){
-					startReadID=prevReadID=i;
-					allMarked[i]=1;
-					break;
+				for(UINT64 i=prevReadID;i<numNodes;i++)
+				{
+					if(allMarked[i]==0){
+						startReadID=prevReadID=i;
+						allMarked[i]=1;
+						break;
+					}
 				}
 			}
 		}
