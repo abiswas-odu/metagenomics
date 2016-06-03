@@ -55,7 +55,7 @@ typedef long long INT64;
 
 //Multi-thread parallel options
 #define DEF_THREAD_COUNT 4
-#define MEGA_PAR_GRAPH_SIZE 40000
+#define MEGA_PAR_GRAPH_SIZE 50000
 #define MAX_PAR_GRAPH_SIZE 20000
 #define MID_PAR_GRAPH_SIZE 10000
 #define MIN_PAR_GRAPH_SIZE 5000
