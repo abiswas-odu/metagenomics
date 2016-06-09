@@ -102,14 +102,14 @@ OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph,U
 	if(memPerThdMB<=0)
 		MYEXIT("Error!!! User did not provide enough memory for graph construction.");
 
-	if(memPerThdMB>20000)						//More than 20GB per thread available
+	if(memPerThdMB>=MEGA_THD_MEMORY_SIZE)						//[20-INF)GB per thread available
 		writeParGraphSize=MEGA_PAR_GRAPH_SIZE;
-	else if(memPerThdMB>10000 && memPerThdMB>20000)		//More than 10GB per thread available
+	else if(memPerThdMB>=MAX_THD_MEMORY_SIZE && memPerThdMB<MEGA_THD_MEMORY_SIZE)		//[10-20)GB per thread available
 		writeParGraphSize=MAX_PAR_GRAPH_SIZE;
-	else if(memPerThdMB>5000 && memPerThdMB<10000)  	// 5 - 10GB per thread available
+	else if(memPerThdMB>=MID_THD_MEMORY_SIZE && memPerThdMB<MAX_THD_MEMORY_SIZE)     	//[5,10)GB per thread available
 		writeParGraphSize=MID_PAR_GRAPH_SIZE;
 	else
-		writeParGraphSize=MIN_PAR_GRAPH_SIZE;		// less than 5GB per thread available
+		writeParGraphSize=MIN_PAR_GRAPH_SIZE;		// (0,5)GB per thread available
 
 	buildOverlapGraphFromHashTable(ht,fnamePrefix);
 }
@@ -252,15 +252,12 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			delete exploredReads;
 			delete nodeQ;
 			startReadID=0;
-			#pragma omp critical(assignRandomStart)
+			for(UINT64 i=prevReadID;i<numNodes;i++)
 			{
-				for(UINT64 i=prevReadID;i<numNodes;i++)
-				{
-					if(allMarked[i]==0){
-						startReadID=prevReadID=i;
-						allMarked[i]=1;
-						break;
-					}
+				if(allMarked[i]==0){
+					startReadID=prevReadID=i;
+					allMarked[i]=1;
+					break;
 				}
 			}
 		}
