@@ -560,13 +560,12 @@ vector<UINT64*> * HashTable::setLocalHitList_nocache(const string readString, in
 					std::memset(localReadHits->at(j), 0, hash_block_len*sizeof(MPI_UINT64_T));
 					// Get data from RMA
 					void *buf = localReadHits->at(j);
-					/*if((localOffset+hash_block_len)>=getMemoryMaxLocalOffset(t_rank))
+					if((localOffset+hash_block_len)>getMemoryMaxLocalOffset(t_rank))
 					{
 						cout<<"Req. Start: oProcess:"<<myid<<" tRank:"<<t_rank<<" GlobalOffset:"<<globalStartOffset<<" LocalOffset"<<localOffset<<" blockLen:"<<hash_block_len<<endl;
-					}*/
-					//MPI_Win_lock(MPI_LOCK_SHARED, t_rank, 0, win);
+					}
 					MPI_Get(buf, hash_block_len, MPI_UINT64_T, t_rank, localOffset, hash_block_len, MPI_UINT64_T, win);
-					//MPI_Win_unlock(t_rank, win);
+					//MPI_Win_flush(t_rank, win);
 					rmaCtr++;
 				}
 			}
