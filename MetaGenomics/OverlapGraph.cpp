@@ -137,17 +137,77 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	hashTable = ht;
 	dataSet = ht->getDataset();
 
-	markContainedReads(fnamePrefix);
+	//Create a file index to readID lookup table. Used to load previous partial results in case of a restart...
+	map<UINT64, UINT64> *fIndxReadIDMap = new map<UINT64, UINT64>;
+	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++)
+	{
+		UINT64 fIndx = dataSet->getReadFromID(i)->getFileIndex();
+		auto it = fIndxReadIDMap->end();
+		fIndxReadIDMap->insert(it, pair<UINT64,UINT64>(fIndx,i));
+	}
+
+	markContainedReads(fnamePrefix, fIndxReadIDMap);
 	UINT64 numNodes = dataSet->getNumberOfUniqueReads()+1;
 	bool * allMarked = new bool[numNodes];
 	allMarked[0]=0;
-	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // Initialization; Marked contained reads are considered processed...
+	// Initialization; Marked contained reads are considered processed...
+	#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
+	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++)
 	{
 		if(dataSet->getReadFromID(i)->superReadID==0)
 			allMarked[i]=0;
 		else
 			allMarked[i]=1;
 	}
+
+	//Check if partial previous run data exists... Load partial graph data and mark reads.
+	#pragma omp parallel num_threads(parallelThreadPoolSize)
+	{
+		int threadID = omp_get_thread_num();
+		string parFileName = fnamePrefix + "_" + SSTR(threadID) + "_parGraph.txt";
+
+		if(ifstream(parFileName.c_str()))
+		{
+			cout << "Thread:" << threadID << " Partial graph file exists. Loading marked reads." <<endl;
+			ifstream filePointer;
+			filePointer.open(parFileName.c_str());
+			string text;
+			UINT64 procCtr=0;
+			while(getline(filePointer,text))
+			{
+				procCtr++;
+				vector<string> toks = splitTok(text,'\t');
+				//Get source destination IDs
+				UINT64 sourceReadFindex = atoi(toks[0].c_str());
+				UINT64 destReadFindex = atoi(toks[1].c_str());
+				auto sourceIt = fIndxReadIDMap->find(sourceReadFindex);
+				auto destIt = fIndxReadIDMap->find(destReadFindex);
+
+				//Check if both marked or not
+				vector<string> toks2 = splitTok(toks[2],',');
+				UINT64 markFlag = atoi(toks2[toks2.size()-1].c_str());
+
+				//Check if destination is also marked by this thread.
+				// 0: Only source is marked
+				// 1: Only destination is marked
+				// 2: Both source and destination are marked
+				if(markFlag==0)
+					allMarked[sourceIt->second]=1;
+				else if (markFlag==1)
+					allMarked[destIt->second]=1;
+				else
+				{
+					allMarked[sourceIt->second]=1;
+					allMarked[destIt->second]=1;
+				}
+				if(procCtr%1000000==0)
+					cout<< "Thread:" << threadID << " " <<procCtr<<" marked reads loaded ..."<<endl;
+			}
+		}
+	}
+
+	//Restart operations complete. Delete file index to read ID map
+	delete fIndxReadIDMap;
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
 		UINT64 startReadID=0,prevReadID=0;
@@ -274,7 +334,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	This function check if a read contains other small reads. If a read is contained in more than one super read
 	then it is assigned to the longest such super read. Also duplicate reads are marked
 **********************************************************************************************************************/
-void OverlapGraph::markContainedReads(string fnamePrefix)
+void OverlapGraph::markContainedReads(string fnamePrefix, map<UINT64, UINT64> *fIndxReadIDMap)
 {
 	CLOCKSTART;
 	UINT64 nonContainedReads = 0;
@@ -296,10 +356,11 @@ void OverlapGraph::markContainedReads(string fnamePrefix)
 					#pragma omp task firstprivate(text)
 					{
 						vector<string> toks = splitTok(text,'\t');
-						UINT64 containedReadID = atoi(toks[0].c_str());
-						UINT64 containingReadID = atoi(toks[1].c_str());
-						Read *r = dataSet->getReadFromFileIndex(containedReadID); // Get the read
-						r->superReadID=containingReadID;
+						UINT64 containedReadFindex = atoi(toks[0].c_str());
+						UINT64 containingReadFindex = atoi(toks[1].c_str());
+						auto it = fIndxReadIDMap->find(containedReadFindex);
+						Read *r = dataSet->getReadFromID(it->second); // Get the read
+						r->superReadID=containingReadFindex;
 					}
 					if(procCtr%1000000==0)
 						cout<<procCtr<<" contained reads processed..."<<endl;
