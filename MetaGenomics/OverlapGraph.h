@@ -46,7 +46,7 @@ class OverlapGraph
 		UINT64 writeParGraphSize;									//No. of vertices to mark before writing graph to memory
 		UINT8 twinEdgeOrientation(UINT8 orientation);				// Orientation of the reverse edge.
 	public:
-		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph, string fnamePrefix,int myid, int MPINodeBlockSize, int numprocs);								// Another constructor.
+		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph,UINT64 maxMemSizeGB, string fnamePrefix,int myid, int MPINodeBlockSize, int numprocs);								// Another constructor.
 		~OverlapGraph();											// Destructor.
 		bool markTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph); // Mark transitive edges of a read.
 		bool buildOverlapGraphFromHashTable(HashTable *ht, string fnamePrefix, int MPINodeBlockSize, int numprocs);			// Build the overlap graph using hashtable.
