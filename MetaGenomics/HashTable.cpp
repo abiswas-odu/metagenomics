@@ -948,7 +948,10 @@ string HashTable::getStringReverse(Read *r, int myid)
 {
 	return reverseComplement(getStringForward(r,myid));
 }
-
+/*
+ * Check if the given read belongs to this MPI node and and returns true if contained read has to be processed by this
+ * MPI node
+  */
 bool HashTable::needsProcessing(UINT64 read1ID, string readString, int myid)
 {
 	string prefixForward = readString.substr(0,hashStringLength); 											// Prefix of the forward string.
