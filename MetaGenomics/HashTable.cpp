@@ -297,6 +297,7 @@ void HashTable::readReadSequenceFromFile(string fileName, UINT64 minOverlap, UIN
 		if(line1.length() > minOverlap && dataSet->testRead(line1) ) // Test the read is of good quality.
 		{
 			readID++;
+			cout<<"Proc:"<<myid<<"Processing read:"<<readID<<endl;
 			insertIntoTable(dataSet->getReadFromID(readID), line1 ,hashDataLengths, myid); 								// Calculate the offset lengths of each hash table key in the hash table.
 			goodReads++;
 		}
@@ -430,6 +431,7 @@ bool HashTable::insertIntoTable(Read *read, string forwardRead, UINT64 *hashData
 	{
 		UINT64 localBaseOffset = getLocalOffset(baseOffset,myid);
 		UINT64 currentOffset = hashDataLengths[index];					// Get the current offset of the hash value in the hashData table
+		cout<<"Proc:"<<myid<<"Accessing HASH:"<<localBaseOffset+currentOffset<<endl;
 		hashData[localBaseOffset+currentOffset] = prefixForwardID;
 		/* for each base of the DNA sequence */
 		for (size_t i = 0; i < forwardRead.length(); i++)
