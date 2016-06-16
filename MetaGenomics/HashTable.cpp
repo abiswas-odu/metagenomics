@@ -257,7 +257,7 @@ void HashTable::readReadSequenceFromFile(string fileName, UINT64 minOverlap, UIN
 	{
 		string line1="",line0="";
 		if( (goodReads + badReads ) != 0 && (goodReads + badReads)%1000000 == 0)
-			cout<< setw(10) << goodReads + badReads << " read lengths added in hashtable. " << setw(10) << goodReads << " good reads." << setw(10) << badReads << " bad reads." << endl;
+			cout<< setw(10) << goodReads + badReads << " read sequence added in hashtable. " << setw(10) << goodReads << " good reads." << setw(10) << badReads << " bad reads." << endl;
 		if(fileType == UNDEFINED)
 		{
 			if(text[0] == '>')
@@ -351,6 +351,7 @@ void HashTable::setHashTableDataSize(int myid)
 {
 	int numElements=memoryDataPartitions->at(myid+1)-memoryDataPartitions->at(myid);
 	//hashData = new UINT64[numElements];
+	cout<<"MPI UINT64:"<<sizeof(MPI_UINT64_T)<<endl;
 	hashData = NULL;
 	MPI_Alloc_mem(numElements*sizeof(MPI_UINT64_T), MPI_INFO_NULL, (void **)&hashData);
 	MPI_Win_create(hashData, numElements*sizeof(MPI_UINT64_T), sizeof(MPI_UINT64_T), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
@@ -431,7 +432,6 @@ bool HashTable::insertIntoTable(Read *read, string forwardRead, UINT64 *hashData
 	{
 		UINT64 localBaseOffset = getLocalOffset(baseOffset,myid);
 		UINT64 currentOffset = hashDataLengths[index];					// Get the current offset of the hash value in the hashData table
-		cout<<"Proc:"<<myid<<"Accessing HASH:"<<localBaseOffset+currentOffset<<endl;
 		hashData[localBaseOffset+currentOffset] = prefixForwardID;
 		/* for each base of the DNA sequence */
 		for (size_t i = 0; i < forwardRead.length(); i++)
@@ -497,7 +497,7 @@ bool HashTable::insertIntoTable(Read *read, string forwardRead, UINT64 *hashData
 		}
 	}
 	//Update data lengths to maintain global consistency of offset values
-	hashDataLengths[index] += dna_word + 1;
+	hashDataLengths[index] += (dna_word + 1);
 	return true;
 }
 /**********************************************************************************************************************
