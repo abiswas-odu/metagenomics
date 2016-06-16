@@ -351,7 +351,7 @@ void HashTable::setHashTableDataSize(int myid)
 {
 	int numElements=memoryDataPartitions->at(myid+1)-memoryDataPartitions->at(myid);
 	//hashData = new UINT64[numElements];
-	cout<<"MPI UINT64:"<<sizeof(MPI_LONG_LONG_INT)<<endl;
+	cout<<"MPI UINT64:"<<sizeof(MPI_UNSIGNED_LONG_LONG)<<endl;
 	hashData = NULL;
 	MPI_Alloc_mem(numElements*sizeof(MPI_UINT64_T), MPI_INFO_NULL, (void **)&hashData);
 	MPI_Win_create(hashData, numElements*sizeof(MPI_UINT64_T), sizeof(MPI_UINT64_T), MPI_INFO_NULL, MPI_COMM_WORLD, &win);
