@@ -42,8 +42,8 @@ int main(int argc, char **argv)
 			maxThreads, writeGraphSize, maxMemSizeGB);
 	cout<<"Max usable memory: "<<maxMemSizeGB<< " GB"<<endl;
 	Dataset *dataSet = new Dataset(pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength);
-	HashTable *hashTable=new HashTable(numprocs);
-	hashTable->insertDataset(dataSet, minimumOverlapLength,numprocs, myid);
+	HashTable *hashTable=new HashTable();
+	hashTable->insertDataset(dataSet, minimumOverlapLength,maxThreads);
 	OverlapGraph *overlapGraph;
 	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,maxMemSizeGB,allFileName,myid,MPI_BLOCK,numprocs); //hashTable deleted by this function after building the graph also writes graph
 	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
