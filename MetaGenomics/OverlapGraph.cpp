@@ -73,6 +73,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 {
 	CLOCKSTART;
 	markContainedReads(fnamePrefix, numprocs);
+	exit(0);
 	UINT64 numElements=dataSet->getNumberOfUniqueReads();
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
