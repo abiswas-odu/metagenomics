@@ -435,28 +435,31 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 	}
 	filePointer.close();
 	cout<<"Completed contained read computation."<<endl;
-	int ctdReads=0;
-	//Get contained read count
-	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
-	{
-		Read *read1 = dataSet->getReadFromID(i); // Get the read
-		if(read1->superReadID!=0)		//If read is already marked as contained, there is no need to look for contained reads within it
-			ctdReads++;
-	}
-	UINT64 *buf = new UINT64[ctdReads];
-	size_t j=0;
-	//Populate buffer of contained reads
-	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
-	{
-		Read *read1 = dataSet->getReadFromID(i); // Get the read
-		if(read1->superReadID!=0)		//If read is already marked as contained, there is no need to look for contained reads within it
-		{
-			buf[j]=i;
-			j++;
-		}
-	}
+	//If multiple MPI processes
 	if(numprocs>1)			//Only one process will deadlock
 	{
+		int ctdReads=0;
+		//Get contained read count
+		for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
+		{
+			Read *read1 = dataSet->getReadFromID(i); // Get the read
+			if(read1->superReadID!=0)		//If read is already marked as contained, there is no need to look for contained reads within it
+				ctdReads++;
+		}
+
+		UINT64 *buf = new UINT64[ctdReads];
+		size_t j=0;
+		//Populate buffer of contained reads
+		for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
+		{
+			Read *read1 = dataSet->getReadFromID(i); // Get the read
+			if(read1->superReadID!=0)		//If read is already marked as contained, there is no need to look for contained reads within it
+			{
+				buf[j]=i;
+				j++;
+			}
+		}
+
 		MPI_Request request[numprocs];
 		for(int i=0;i<numprocs;i++)
 		{
@@ -491,10 +494,10 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 		for(int i=0;i<numprocs;i++)
 			if(i!=myProcID)
 				MPI_Wait(&request[i],MPI_STATUS_IGNORE);
+		//Delete buffer of contained reads
+		delete[] buf;
 	}
 	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
-	//Delete buffer of contained reads
-	delete[] buf;
 	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
 	{
 		Read *read1 = dataSet->getReadFromID(i); // Get the read
