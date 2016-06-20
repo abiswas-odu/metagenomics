@@ -53,7 +53,7 @@ class OverlapGraph
 		bool insertEdge(Edge * edge, map<UINT64, vector<Edge*> * > *parGraph); 								// Insert an edge in the partial overlap graph.
 		bool insertEdge(Read *read1, Read *read2, UINT64 r1Len, UINT64 r2Len,  UINT8 orient, UINT16 overlapOffset, map<UINT64, vector<Edge*> * > *parGraph); // Insert an edge in the overlap graph.
 
-		bool checkOverlapForContainedRead(string read1, string read2, UINT64 orient, UINT64 start);
+		bool checkOverlapForContainedRead(string read1, Read *read2, UINT64 orient, UINT64 start);
 		bool checkOverlap(string read1, string read2, UINT64 orient, UINT64 start);
 
 		bool insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> * exploredReads, map<UINT64, vector<Edge*> * > *parGraph);	// Insert into the overlap graph all edges of a read.

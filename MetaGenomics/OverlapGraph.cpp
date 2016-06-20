@@ -361,9 +361,8 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 																						// Orientation 2 means prefix of reverse of the read
 																						// Orientation 3 means prefix of reverse of the read
 					UINT64 read2Len = hashTable->getReadLength(read2->getReadHashOffset());
-					string read2String = hashTable->getStringForward(read2->getReadHashOffset()); // Get the forward of the read
 
-					if(read1->getReadNumber() != read2->getReadNumber() && checkOverlapForContainedRead(read1String,read2String,(data >> 62),j)) // read1 need to be longer than read2 in order to contain read2
+					if(read1->getReadNumber() != read2->getReadNumber() && checkOverlapForContainedRead(read1String,read2,(data >> 62),j)) // read1 need to be longer than read2 in order to contain read2
 																																			 // Check if the remaining of the strings also match
 					{
 						if(read1String.length() > read2Len)
@@ -521,10 +520,10 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 	orient 3 means prefix of reverse of the read2
 	We need to check if the remaining of the stings match to see if read2 is contained in read1.
 **********************************************************************************************************************/
-bool OverlapGraph::checkOverlapForContainedRead(string read1, string read2, UINT64 orient, UINT64 start)
+bool OverlapGraph::checkOverlapForContainedRead(string read1, Read *read2, UINT64 orient, UINT64 start)
 {
 	UINT64 hashStringLength = hashTable->getHashStringLength(), lengthRemaining1, lengthRemaining2;
-	string string2 = (orient == 0 || orient== 1) ? read2 : reverseComplement(read2); // Get the string in read2 based on the orientation.
+	string string2 = (orient == 0 || orient== 1) ? hashTable->getStringForward(read2->getReadHashOffset()) : hashTable->getStringReverse(read2->getReadHashOffset()); // Get the string in read2 based on the orientation.
 	if(orient == 0 || orient == 2)
 									// orient 0
 									//   >--------MMMMMMMMMMMMMMM*******------> read1      M means match found by hash table
