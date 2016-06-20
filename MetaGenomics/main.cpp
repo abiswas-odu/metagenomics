@@ -24,14 +24,13 @@ int main(int argc, char **argv)
 	double start, end;
 	char name[MPI_MAX_PROCESSOR_NAME];
 
-	//MPI_Init(&argc, &argv);
-	//MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
-	//MPI_Comm_rank(MPI_COMM_WORLD,&myid);
-	//MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
-	//MPI_Get_processor_name(name, &len);
-	//start = MPI_Wtime();
-	//printf("Rank %d running on %s with %d threads.\n", myid, name, omp_get_max_threads());
-	printf("%d threads.\n", omp_get_max_threads());
+	MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
+	MPI_Comm_rank(MPI_COMM_WORLD,&myid);
+	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
+	MPI_Get_processor_name(name, &len);
+	start = MPI_Wtime();
+	printf("Rank %d running on %s with %d threads.\n", myid, name, omp_get_max_threads());
 	UINT64 minimumOverlapLength;
 	vector<string> pairedEndFileNames, singleEndFileNames;
 	string allFileName;
@@ -51,12 +50,12 @@ int main(int argc, char **argv)
 	delete hashTable;	//  Do not need the hash table any more.
 	delete dataSet;
 	delete overlapGraph;
-	//MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
-	//end = MPI_Wtime();
-	//if (myid == 0) { /* use time on master node */
-	//   printf("Runtime for %d processes = %f\n", numprocs, end-start);
-	//}
-	//MPI_Finalize();
+	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
+	end = MPI_Wtime();
+	if (myid == 0) { /* use time on master node */
+	   printf("Runtime for %d processes = %f\n", numprocs, end-start);
+	}
+	MPI_Finalize();
 }
 
 /**********************************************************************************************************************
