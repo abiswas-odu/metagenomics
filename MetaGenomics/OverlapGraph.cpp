@@ -73,6 +73,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 {
 	CLOCKSTART;
 	markContainedReads(fnamePrefix, numprocs);
+	exit(0);
 	UINT64 numElements=dataSet->getNumberOfUniqueReads();
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
@@ -328,13 +329,13 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 	if(!filePointer)
 		MYEXIT("Unable to open file: +"+fnamePrefix+"_"+SSTR(myProcID)+"_containedReads.txt");
 
-	UINT64 numReadsPerProc = (dataSet->getNumberOfUniqueReads()/numprocs);
+	/*UINT64 numReadsPerProc = (dataSet->getNumberOfUniqueReads()/numprocs);
 	UINT64 startIndex = (numReadsPerProc*myProcID) +1;
 	UINT64 endIndex = dataSet->getNumberOfUniqueReads();
 	if((myProcID+1)<numprocs)
-		endIndex = (numReadsPerProc*(myProcID+1));
+		endIndex = (numReadsPerProc*(myProcID+1));*/
 
-	cout<<"Proc:"<<myProcID<<" Searching contained reads for range: ("<<startIndex<<","<<endIndex<<")"<<endl;
+	//cout<<"Proc:"<<myProcID<<" Searching contained reads for range: ("<<startIndex<<","<<endIndex<<")"<<endl;
 	#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
 	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
 	{
