@@ -140,7 +140,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					myMarked[sourceIt->second-1]=1;
 					myMarked[destIt->second-1]=1;
 				}
-				if(procCtr%1000==0)
+				if(procCtr%1000000==0)
 					cout<<"Proc"<<myProcID<< " Thread:" << threadID << " " <<procCtr<<" marked reads loaded ..."<<endl;
 			}
 		}
