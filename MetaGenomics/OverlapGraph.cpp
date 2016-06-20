@@ -435,6 +435,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 	}
 	filePointer.close();
 	cout<<"Proc:"<<myProcID<<" Completed contained read computation."<<endl;
+	CLOCKSTOP;
 	//If multiple MPI processes
 	if(numprocs>1)			//Only one process will deadlock
 	{
@@ -508,7 +509,6 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 	}
 	cout<< endl << setw(10) << nonContainedReads << " Non-contained reads. (Keep as is)" << endl;
 	cout<< setw(10) << dataSet->getNumberOfUniqueReads()-nonContainedReads << " contained reads. (Need to change their mate-pair information)" << endl;
-	CLOCKSTOP;
 }
 
 
