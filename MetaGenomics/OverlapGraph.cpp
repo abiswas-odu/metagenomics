@@ -336,7 +336,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 
 	cout<<"Proc:"<<myProcID<<" Searching contained reads for range: ("<<startIndex<<","<<endIndex<<")"<<endl;
 	#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
-	for(UINT64 i = startIndex; i <= endIndex; i++) // For each read
+	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
 	{
 		Read *read1 = dataSet->getReadFromID(i); // Get the read
 		if(read1->superReadID!=0)		//If read is already marked as contained, there is no need to look for contained reads within it
