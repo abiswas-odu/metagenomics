@@ -434,7 +434,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, int numprocs)
 		}//End of inner for
 	}
 	filePointer.close();
-	cout<<"Completed contained read computation."<<endl;
+	cout<<"Proc:"<<myProcID<<" Completed contained read computation."<<endl;
 	//If multiple MPI processes
 	if(numprocs>1)			//Only one process will deadlock
 	{

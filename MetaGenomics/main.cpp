@@ -30,7 +30,7 @@ int main(int argc, char **argv)
 	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
 	MPI_Get_processor_name(name, &len);
 	start = MPI_Wtime();
-	printf("Rank %d running on %s\n", myid, name);
+	printf("Rank %d running on %s with %d threads.\n", myid, name, omp_get_max_threads());
 	UINT64 minimumOverlapLength;
 	vector<string> pairedEndFileNames, singleEndFileNames;
 	string allFileName;
