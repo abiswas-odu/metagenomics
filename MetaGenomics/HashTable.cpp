@@ -123,8 +123,8 @@ void HashTable::readReadLengthsFromFile(string fileName, UINT64 minOverlap)
 	CLOCKSTART;
 	cout << "Reading read lengths from file: " << fileName << endl;
 	ifstream myFile;
-	myFile.open (fileName.c_str());
-	if(myFile == NULL)
+	myFile.open(fileName.c_str());
+	if(!myFile)
 		MYEXIT("Unable to open file: "+fileName)
 	UINT64 goodReads = 0, badReads = 0;
 	vector<string> line;
@@ -198,7 +198,7 @@ void HashTable::readReadSequenceFromFile(string fileName, UINT64 minOverlap, UIN
 	cout << "Reading read data from file: " << fileName << endl;
 	ifstream myFile;
 	myFile.open (fileName.c_str());
-	if(myFile == NULL)
+	if(!myFile)
 		MYEXIT("Unable to open file: "+fileName)
 	UINT64 goodReads = 0, badReads = 0;
 	vector<string> line;
