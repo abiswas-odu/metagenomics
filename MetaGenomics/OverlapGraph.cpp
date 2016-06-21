@@ -922,7 +922,7 @@ bool OverlapGraph::saveParGraphToFile(string fileName, map<UINT64,nodeType> * ex
 	//CLOCKSTART;
 	ofstream filePointer;
 	filePointer.open(fileName.c_str(), std::ios_base::app);
-	if(filePointer == NULL)
+	if(!filePointer)
 		MYEXIT("Unable to open file: "+fileName);
 
 	for (map<UINT64, vector<Edge*> * >::iterator it=parGraph->begin(); it!=parGraph->end();)
