@@ -44,8 +44,13 @@ int main(int argc, char **argv)
 	Dataset *dataSet = new Dataset(pairedEndFileNames, singleEndFileNames, allFileName, minimumOverlapLength);
 	HashTable *hashTable=new HashTable();
 	hashTable->insertDataset(dataSet, minimumOverlapLength,maxThreads);
-	OverlapGraph *overlapGraph;
-	overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,maxMemSizeGB,allFileName,myid,MPI_BLOCK,numprocs); //hashTable deleted by this function after building the graph also writes graph
+	OverlapGraph *overlapGraph=nullptr;
+	try{
+		overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,maxMemSizeGB,allFileName,myid,MPI_BLOCK,numprocs); //hashTable deleted by this function after building the graph also writes graph
+	} catch (const std::bad_alloc& e) {
+		std::cout << "Allocation failed: " << e.what() << '\n';
+		int ret_ignore=system("cp /proc/self/status .");
+	}
 	//MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
 	delete hashTable;	//  Do not need the hash table any more.
 	delete dataSet;

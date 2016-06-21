@@ -231,10 +231,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					{
 						if(myProcID!=j)
 						{
-							#pragma omp critical(getRemoteData)
-							{
-								MPI_Isend(newMarkedList, MIN_MARKED, MPI_UINT64_T, j, 0, MPI_COMM_WORLD, &sendRequest[reqCtr++]);
-							}
+							MPI_Isend(newMarkedList, MIN_MARKED, MPI_UINT64_T, j, 0, MPI_COMM_WORLD, &sendRequest[reqCtr++]);
 						}
 					}
 					//Receive all my data
@@ -243,10 +240,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 						std::memset(readIDBuf, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
 						if(myProcID!=i)
 						{
-							#pragma omp critical(getRemoteData)
-							{
-								MPI_Recv(readIDBuf, MIN_MARKED, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-							}
+							MPI_Recv(readIDBuf, MIN_MARKED, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 							for(int i=0;i<MIN_MARKED;i++)
 							{
 								if(readIDBuf[i]>0)
@@ -283,10 +277,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					{
 						if(myProcID!=j)
 						{
-							#pragma omp critical(getRemoteData)
-							{
-								MPI_Isend(&myFinFlag, 1, MPI_UINT64_T, j, 0, MPI_COMM_WORLD, &sendRequest[reqCtr++]);
-							}
+							MPI_Isend(&myFinFlag, 1, MPI_UINT64_T, j, 0, MPI_COMM_WORLD, &sendRequest[reqCtr++]);
 						}
 
 					}
@@ -295,18 +286,12 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 						if(myProcID!=i)
 						{
 							int remoteFin=0;
-							#pragma omp critical(getRemoteData)
-							{
-								MPI_Recv(&remoteFin, 1, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-							}
+							MPI_Recv(&remoteFin, 1, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 							allRemoteFinish = (allRemoteFinish && remoteFin);
 						}
 					}
 					//Wait till all the sending is done...
-					#pragma omp critical(getRemoteData)
-					{
-						MPI_Waitall(numprocs-1, sendRequest,MPI_STATUS_IGNORE);
-					}
+					MPI_Waitall(numprocs-1, sendRequest,MPI_STATUS_IGNORE);
 					//If this process is finished and all remote processes are finished end while loop
 					if(allRemoteFinish && myFinFlag)
 						allCompleteFlag=true;

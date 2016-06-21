@@ -61,9 +61,9 @@ typedef long long INT64;
 #define MPI_BLOCK 10
 
 //Multi-thread parallel options
-#define MEGA_PAR_GRAPH_SIZE 80000
-#define MAX_PAR_GRAPH_SIZE 40000
-#define MID_PAR_GRAPH_SIZE 20000
+#define MEGA_PAR_GRAPH_SIZE 20000
+#define MAX_PAR_GRAPH_SIZE 15000
+#define MID_PAR_GRAPH_SIZE 10000
 #define MIN_PAR_GRAPH_SIZE 1000
 
 #define MEGA_THD_MEMORY_SIZE 20000

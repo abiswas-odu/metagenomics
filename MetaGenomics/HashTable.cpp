@@ -209,7 +209,7 @@ void HashTable::readReadSequenceFromFile(string fileName, UINT64 minOverlap, UIN
 	{
 		string line1="",line0="";
 		if( (goodReads + badReads ) != 0 && (goodReads + badReads)%1000000 == 0)
-			cout<< setw(10) << goodReads + badReads << " read lengths added in hashtable. " << setw(10) << goodReads << " good reads." << setw(10) << badReads << " bad reads." << endl;
+			cout<< setw(10) << goodReads + badReads << " read sequences added in hashtable. " << setw(10) << goodReads << " good reads." << setw(10) << badReads << " bad reads." << endl;
 		if(fileType == UNDEFINED)
 		{
 			if(text[0] == '>')
