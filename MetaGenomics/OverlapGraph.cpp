@@ -147,6 +147,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	}
 
 	markContainedReads(fnamePrefix, fIndxReadIDMap);
+
 	UINT64 numNodes = dataSet->getNumberOfUniqueReads()+1;
 	bool * allMarked = new bool[numNodes];
 	allMarked[0]=0;
@@ -535,8 +536,6 @@ bool OverlapGraph::checkOverlapForContainedRead(string read1, Read *read2, UINT6
 	return false;
 
 }
-
-
 
 
 /**********************************************************************************************************************
