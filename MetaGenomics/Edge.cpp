@@ -26,9 +26,9 @@ Edge::Edge(void)
 /**********************************************************************************************************************
 	Another Constructor
 **********************************************************************************************************************/
-Edge::Edge(Read *from,UINT16 fromLen, Read *to, UINT16 toLen, UINT64 orient, UINT64 length)
+Edge::Edge(Read *from, Read *to, UINT64 orient, UINT64 length)
 {
-	makeEdge(from,fromLen, to,toLen, orient, length);
+	makeEdge(from, to, orient, length);
 }
 
 /**********************************************************************************************************************
@@ -44,14 +44,12 @@ Edge::~Edge()
 /**********************************************************************************************************************
 	Function to insert a simple edge
 **********************************************************************************************************************/
-bool Edge::makeEdge(Read *from,UINT16 fromLen, Read *to,UINT16 toLen, UINT64 orient, UINT64 length)
+bool Edge::makeEdge(Read *from, Read *to, UINT64 orient, UINT64 length)
 {
 	source = from;
 	destination = to;
 	overlapOrientation = orient;
 	overlapOffset = length;
-	srcLen=fromLen;
-	destLen=toLen;
 	// Initialize variables.
 	transitiveRemovalFlag = false;
 	return true;
