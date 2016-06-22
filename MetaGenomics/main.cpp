@@ -20,11 +20,16 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 
 int main(int argc, char **argv)
 {
-	int numprocs, myid, len;
+	int numprocs, myid, len, provided=0;
 	double start, end;
 	char name[MPI_MAX_PROCESSOR_NAME];
 
-	MPI_Init(&argc, &argv);
+	MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED , &provided);
+	if (provided < MPI_THREAD_SERIALIZED)
+	{
+	   printf("Error: the MPI library doesn't provide the required thread level\n");
+	   MPI_Abort(MPI_COMM_WORLD, 0);
+	}
 	MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
 	MPI_Comm_rank(MPI_COMM_WORLD,&myid);
 	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */

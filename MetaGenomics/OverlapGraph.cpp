@@ -191,117 +191,117 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 		int threadID = omp_get_thread_num();
 		if(threadID==0 && numprocs>1)
 		{
-				bool allCompleteFlag=false;
-				bool allRemoteFinish=false;
-				vector<bool> * allMarked = new vector<bool>;
-				allMarked->reserve(numElements);
-				for(UINT64 i = 0; i < numElements; i++) // Initialization with marked contained read
+			bool allCompleteFlag=false;
+			bool allRemoteFinish=false;
+			vector<bool> * allMarked = new vector<bool>;
+			allMarked->reserve(numElements);
+			for(UINT64 i = 0; i < numElements; i++) // Initialization with marked contained read
+			{
+				if(myMarked[i]==0)
+					allMarked->push_back(0);
+				else
+					allMarked->push_back(1);
+			}
+			//Allocating buffer to send messages
+			UINT64 *newMarkedList=new UINT64[MIN_MARKED];
+			// Allocate a buffer to hold the incoming numbers
+			UINT64 *readIDBuf = new UINT64[MIN_MARKED];
+			while(!allCompleteFlag)
+			{
+				std::memset(newMarkedList, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
+				std::memset(readIDBuf, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
+				//Check if MIN_MARKED reads have been marked by this node
+				size_t newMarkedCount=0;
+				for(size_t i=0;i<numElements;i++)
 				{
-					if(myMarked[i]==0)
-						allMarked->push_back(0);
-					else
-						allMarked->push_back(1);
-				}
-				//Allocating buffer to send messages
-				UINT64 *newMarkedList=new UINT64[MIN_MARKED];
-				// Allocate a buffer to hold the incoming numbers
-				UINT64 *readIDBuf = new UINT64[MIN_MARKED];
-				while(!allCompleteFlag)
-				{
-					std::memset(newMarkedList, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
-					std::memset(readIDBuf, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
-					//Check if MIN_MARKED reads have been marked by this node
-					size_t newMarkedCount=0;
-					for(size_t i=0;i<numElements;i++)
+					if(myMarked[i]>0 && allMarked->at(i)==0)
 					{
-						if(myMarked[i]>0 && allMarked->at(i)==0)
+						allMarked->at(i)=1;
+						newMarkedList[newMarkedCount++] = i+1;
+						if(newMarkedCount==MIN_MARKED)
+							break;
+					}
+				}
+				//MIN_MARKED Reads have been marked inform other processes
+				MPI_Request sendRequest[numprocs-1];
+				size_t reqCtr=0;
+				//Send all my data
+				for(int j=0;j<numprocs;j++)
+				{
+					if(myProcID!=j)
+					{
+						MPI_Isend(newMarkedList, MIN_MARKED, MPI_UINT64_T, j, 0, MPI_COMM_WORLD, &sendRequest[reqCtr++]);
+					}
+				}
+				//Receive all my data
+				for(int i=0;i<numprocs;i++)
+				{
+					std::memset(readIDBuf, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
+					if(myProcID!=i)
+					{
+						MPI_Recv(readIDBuf, MIN_MARKED, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+						for(int i=0;i<MIN_MARKED;i++)
 						{
-							allMarked->at(i)=1;
-							newMarkedList[newMarkedCount++] = i+1;
-							if(newMarkedCount==MIN_MARKED)
+							if(readIDBuf[i]>0)
+							{
+								UINT64 rIndx = readIDBuf[i]-1;
+								allMarked->at(rIndx)=1;
+								myMarked[rIndx]=1;
+							}
+							else
 								break;
 						}
 					}
-					//MIN_MARKED Reads have been marked inform other processes
-					MPI_Request sendRequest[numprocs-1];
-					size_t reqCtr=0;
-					//Send all my data
-					for(int j=0;j<numprocs;j++)
+				}
+				//Wait till all the sending is done...
+				MPI_Waitall(numprocs-1, sendRequest,MPI_STATUS_IGNORE);
+				//Test completion
+				int myFinFlag=1;
+				for(size_t i=0;i<numElements;i++)
+				{
+					if(allMarked->at(i)==0)
 					{
-						if(myProcID!=j)
-						{
-							MPI_Isend(newMarkedList, MIN_MARKED, MPI_UINT64_T, j, 0, MPI_COMM_WORLD, &sendRequest[reqCtr++]);
-						}
+						myFinFlag=0;
+						break;
 					}
-					//Receive all my data
-					for(int i=0;i<numprocs;i++)
+				}
+				//Inform others of status
+				reqCtr=0;
+				allRemoteFinish=true;
+				for(int j=0;j<numprocs;j++)
+				{
+					if(myProcID!=j)
 					{
-						std::memset(readIDBuf, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
-						if(myProcID!=i)
-						{
-							MPI_Recv(readIDBuf, MIN_MARKED, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-							for(int i=0;i<MIN_MARKED;i++)
-							{
-								if(readIDBuf[i]>0)
-								{
-									UINT64 rIndx = readIDBuf[i]-1;
-									allMarked->at(rIndx)=1;
-									myMarked[rIndx]=1;
-								}
-								else
-									break;
-							}
-						}
+						MPI_Isend(&myFinFlag, 1, MPI_UINT64_T, j, 0, MPI_COMM_WORLD, &sendRequest[reqCtr++]);
 					}
-					//Wait till all the sending is done...
-					MPI_Waitall(numprocs-1, sendRequest,MPI_STATUS_IGNORE);
-					//Test completion
-					int myFinFlag=1;
-					for(size_t i=0;i<numElements;i++)
-					{
-						if(allMarked->at(i)==0)
-						{
-							myFinFlag=0;
-							break;
-						}
-					}
-					//Inform others of status
-					reqCtr=0;
-					allRemoteFinish=true;
-					for(int j=0;j<numprocs;j++)
-					{
-						if(myProcID!=j)
-						{
-							MPI_Isend(&myFinFlag, 1, MPI_UINT64_T, j, 0, MPI_COMM_WORLD, &sendRequest[reqCtr++]);
-						}
 
-					}
-					//Get status from others
-					for(int i=0;i<numprocs;i++)
+				}
+				//Get status from others
+				for(int i=0;i<numprocs;i++)
+				{
+					if(myProcID!=i)
 					{
-						if(myProcID!=i)
-						{
-							int remoteFin=0;
-							MPI_Recv(&remoteFin, 1, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-							allRemoteFinish = (allRemoteFinish && remoteFin);
-						}
+						int remoteFin=0;
+						MPI_Recv(&remoteFin, 1, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+						allRemoteFinish = (allRemoteFinish && remoteFin);
 					}
-					//Wait till all the sending is done...
-					MPI_Waitall(numprocs-1, sendRequest,MPI_STATUS_IGNORE);
-					//If this process is finished and all remote processes are finished end while loop
-					if(allRemoteFinish && myFinFlag)
-						allCompleteFlag=true;
-					if(newMarkedCount>0)
-					{
-						INT64 mem_end = checkMemoryUsage();
-						cout<<"Proc:"<<myProcID<<" Round Complete:Marked "<<newMarkedCount<<" Memory usage:"<<mem_end<<endl;
-					}
-					std::this_thread::sleep_for(std::chrono::milliseconds(100));
-				}//end of while
-				cout<<"Proc:"<<myProcID<<" Main communication thread complete!!!"<<endl;
-				delete allMarked;
-				delete[] newMarkedList;
-				delete[] readIDBuf;
+				}
+				//Wait till all the sending is done...
+				MPI_Waitall(numprocs-1, sendRequest,MPI_STATUS_IGNORE);
+				//If this process is finished and all remote processes are finished end while loop
+				if(allRemoteFinish && myFinFlag)
+					allCompleteFlag=true;
+				if(newMarkedCount>0)
+				{
+					INT64 mem_end = checkMemoryUsage();
+					cout<<"Proc:"<<myProcID<<" Round Complete:Marked "<<newMarkedCount<<" Memory usage:"<<mem_end<<endl;
+				}
+				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			}//end of while
+			cout<<"Proc:"<<myProcID<<" Main communication thread complete!!!"<<endl;
+			delete allMarked;
+			delete[] newMarkedList;
+			delete[] readIDBuf;
 		}
 		else
 		{
