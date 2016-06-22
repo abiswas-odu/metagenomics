@@ -177,13 +177,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				MPI_Wait(&request[i],MPI_STATUS_IGNORE);
 	}
 	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
-	UINT64 markedCtr=0;
-	for(UINT64 i = 0; i < numElements; i++) // For each readid
-	{
-		if(myMarked[i]==1)
-			markedCtr++;
-	}
-	cout<<"Reads previously marked:"<<markedCtr<<endl;
 	//Restart operations complete. Delete file index to read ID map
 	delete fIndxReadIDMap;
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
@@ -191,7 +184,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 		int threadID = omp_get_thread_num();
 		if(threadID==0 && numprocs>1)
 		{
-			/*bool allCompleteFlag=false;
+			bool allCompleteFlag=false;
 			bool allRemoteFinish=false;
 			vector<bool> * allMarked = new vector<bool>;
 			allMarked->reserve(numElements);
@@ -202,6 +195,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				else
 					allMarked->push_back(1);
 			}
+
 			//Allocating buffer to send messages
 			UINT64 *newMarkedList=new UINT64[MIN_MARKED];
 			// Allocate a buffer to hold the incoming numbers
@@ -209,7 +203,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			while(!allCompleteFlag)
 			{
 				std::memset(newMarkedList, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
-				std::memset(readIDBuf, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
 				//Check if MIN_MARKED reads have been marked by this node
 				size_t newMarkedCount=0;
 				for(size_t i=0;i<numElements;i++)
@@ -236,7 +229,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				//Receive all my data
 				for(int i=0;i<numprocs;i++)
 				{
-					std::memset(readIDBuf, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
 					if(myProcID!=i)
 					{
 						MPI_Recv(readIDBuf, MIN_MARKED, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -251,6 +243,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 							else
 								break;
 						}
+						std::memset(readIDBuf, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
 					}
 				}
 				//Wait till all the sending is done...
@@ -272,7 +265,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				{
 					if(myProcID!=j)
 					{
-						MPI_Isend(&myFinFlag, 1, MPI_UINT64_T, j, 0, MPI_COMM_WORLD, &sendRequest[reqCtr++]);
+						MPI_Isend(&myFinFlag, 1, MPI_INT, j, 0, MPI_COMM_WORLD, &sendRequest[reqCtr++]);
 					}
 
 				}
@@ -282,7 +275,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					if(myProcID!=i)
 					{
 						int remoteFin=0;
-						MPI_Recv(&remoteFin, 1, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+						MPI_Recv(&remoteFin, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 						allRemoteFinish = (allRemoteFinish && remoteFin);
 					}
 				}
@@ -291,17 +284,13 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				//If this process is finished and all remote processes are finished end while loop
 				if(allRemoteFinish && myFinFlag)
 					allCompleteFlag=true;
-				if(newMarkedCount>0)
-				{
-					INT64 mem_end = checkMemoryUsage();
-					cout<<"Proc:"<<myProcID<<" Round Complete:Marked "<<newMarkedCount<<" Memory usage:"<<mem_end<<endl;
-				}
+				cout<<"Proc:"<<myProcID<<" Round Complete:Marked "<<newMarkedCount<<endl;
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			}//end of while
 			cout<<"Proc:"<<myProcID<<" Main communication thread complete!!!"<<endl;
 			delete allMarked;
 			delete[] newMarkedList;
-			delete[] readIDBuf;*/
+			delete[] readIDBuf;
 		}
 		else
 		{
@@ -311,7 +300,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				map<UINT64,nodeType> *exploredReads = new map<UINT64,nodeType>;							//Record of nodes processed
 				queue<UINT64> *nodeQ = new queue<UINT64>;												//Queue
 				map<UINT64, vector<Edge*> * > *parGraph = new map<UINT64, vector<Edge*> * >;			//Partial graph
-
 				vector<Edge *> *newList = new vector<Edge *>;
 				parGraph->insert(std::pair<UINT64, vector<Edge*> * >(startReadID, newList)); // Insert start node
 				UINT64 writtenMakedNodes=0;
@@ -321,6 +309,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				{
 					UINT64 read1 = nodeQ->front();										//Pop from queue...
 					nodeQ->pop();
+					cout<<"Proc:"<<myProcID<<" Thread:"<<threadID<<" Read Start:"<<read1 << endl;
 					if(myMarked[read1-1]==0)
 					{
 						myMarked[read1-1]=1;									//Mark this as being processed by this thread
@@ -370,12 +359,10 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 								removeTransitiveEdges(read1, parGraph); // Remove the transitive edges
 								exploredReads->at(read1) = EXPLORED_AND_TRANSITIVE_EDGES_REMOVED;
 								writtenMakedNodes++;
-
 							}
 						}
-						if(writtenMakedNodes%100==0)
-							cout<<"Proc:"<<myProcID<<" Thread:"<<threadID<<" Reads Processed:"<<writtenMakedNodes << endl;
 					}
+					cout<<"Proc:"<<myProcID<<" Thread:"<<threadID<<" Reads Processed:"<<writtenMakedNodes << endl;
 				}
 				INT64 mem_used = checkMemoryUsage();
 				if(writtenMakedNodes>0)
@@ -736,7 +723,6 @@ bool OverlapGraph::checkOverlap(string read1, Read *read2, UINT64 orient, UINT64
 **********************************************************************************************************************/
 bool OverlapGraph::insertEdge(Edge * edge, map<UINT64, vector<Edge*> * > *parGraph)
 {
-
 	UINT64 ID = edge->getSourceRead()->getReadNumber(); // This is the source read.
 	if(parGraph->find(ID) == parGraph->end()){ 			// If there is no edge incident to the node
 		vector<Edge *> *newList = new vector<Edge *>;
