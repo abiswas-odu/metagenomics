@@ -70,10 +70,8 @@ bool isOverlappintInterval(UINT64 mean1, UINT64 sd1, UINT64 mean2, UINT64 sd2)
 OverlapGraph::OverlapGraph(void)
 {
 	// Initialize the variables.
-	estimatedGenomeSize = 0;
 	numberOfNodes = 0;
 	numberOfEdges = 0;
-	flowComputed = false;
 	parallelThreadPoolSize=DEF_THREAD_COUNT;
 	writeParGraphSize=MAX_PAR_GRAPH_SIZE;
 
@@ -89,10 +87,8 @@ BNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMM
 OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph,UINT64 maxMemSizeGB, string fnamePrefix)
 {
 	// Initialize the variables.
-	estimatedGenomeSize = 0;
 	numberOfNodes = 0;
 	numberOfEdges = 0;
-	flowComputed = false;
 	parallelThreadPoolSize=maxThreads;
 
 	UINT64 mem_used = checkMemoryUsage();
@@ -130,10 +126,8 @@ OverlapGraph::~OverlapGraph()
 bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePrefix)
 {
 	CLOCKSTART;
-	estimatedGenomeSize = 0;
 	numberOfNodes = 0;
 	numberOfEdges = 0;
-	flowComputed = false;
 	hashTable = ht;
 	dataSet = ht->getDataset();
 
@@ -375,7 +369,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, map<UINT64, UINT64> *f
 	{
 		ofstream filePointer;
 		filePointer.open(containedReadFile.c_str());
-		if(filePointer == NULL)
+		if(!filePointer)
 			MYEXIT("Unable to open file: +"+fnamePrefix+"_containedReads.txt");
 
 		#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
@@ -583,7 +577,6 @@ bool OverlapGraph::checkOverlap(string read1, Read *read2, UINT64 orient, UINT64
 **********************************************************************************************************************/
 bool OverlapGraph::insertEdge(Edge * edge, map<UINT64, vector<Edge*> * > *parGraph)
 {
-
 	UINT64 ID = edge->getSourceRead()->getReadNumber(); // This is the source read.
 	if(parGraph->find(ID) == parGraph->end()){ 			// If there is no edge incident to the node
 		vector<Edge *> *newList = new vector<Edge *>;
@@ -775,7 +768,7 @@ bool OverlapGraph::saveParGraphToFile(string fileName, map<UINT64,nodeType> * ex
 	//CLOCKSTART;
 	ofstream filePointer;
 	filePointer.open(fileName.c_str(), std::ios_base::app);
-	if(filePointer == NULL)
+	if(!filePointer)
 		MYEXIT("Unable to open file: "+fileName);
 
 	for (map<UINT64, vector<Edge*> * >::iterator it=parGraph->begin(); it!=parGraph->end();)

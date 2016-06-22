@@ -44,7 +44,7 @@ Dataset::Dataset(vector<string> pairedEndFileNames, vector<string> singleEndFile
 	ofstream filePointer;
 	string fileName = fileNamePrefix+"_ReadIDMap.txt";
 	filePointer.open(fileName.c_str());
-	if(filePointer == NULL)
+	if(!filePointer)
 		MYEXIT("Unable to open file: " + fileName);
 
 	for(UINT64 i = 0; i < pairedEndDatasetFileNames.size(); i++)						// Read the paired-end datasets.

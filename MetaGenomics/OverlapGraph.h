@@ -36,23 +36,13 @@ class OverlapGraph
 	private:
 		Dataset * dataSet; 											// Pointer to the dataset containing all the reads.
 		HashTable * hashTable;										// Pointer to the hash table.
-		vector<UINT64> meanOfInsertSizes; 							// Mean of insert sizes.
-		vector<UINT64> sdOfInsertSizes; 							// Standard deviation of insert sizes.
-		UINT64 estimatedGenomeSize;									// Estimated genome size. Works for isolated genome. Will not work for Metagenomics.
 		UINT64 numberOfNodes;										// Number of nodes in the overlap graph.
 		UINT64 numberOfEdges;										// Number of edges in the overlap graph.
 		UINT64 parallelThreadPoolSize;								//No. of OMP threads to spawn
 		UINT64 writeParGraphSize;									//No. of vertices to mark before writing graph to memory
-		INT64 longestMeanOfInsertSize; // CP: the longest mean insert size out of all datasets: max(meanOfInsertSizes[i])
 		UINT64 maxMemMB;
-		UINT8 mergedEdgeOrientation(Edge *edge1, Edge *edge2);		// Orientation of the edge when two edges are merged.
 		UINT8 twinEdgeOrientation(UINT8 orientation);				// Orientation of the reverse edge.
-		bool mergeList(Edge *edge1, Edge *edge2, vector<UINT64> *listReads, vector<UINT16> *listOverlapOffsets, vector<UINT8> * ListOrientations);
-		bool findPathBetweenMatepairs(Read * read1, Read * read2, UINT8 orient, UINT8 datasetNumbe, vector <Edge *> &copyOfPath, vector <UINT64> &copyOfFlags);
-		UINT64 exploreGraph(Edge* firstEdge, Edge * lastEdge, UINT64 distanceOnFirstEdge, UINT64 distanceOnLastEdge, UINT64 datasetNumber, UINT64 level, vector <Edge *> &firstPath, vector <UINT64> &flags);
-
 	public:
-		bool flowComputed;											// Flag to check wheather the flow is computed or not.
 		OverlapGraph(void);											// Default constructor.
 		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph,UINT64 maxMemSizeGB, string fnamePrefix);								// Another constructor.
 		~OverlapGraph();											// Destructor.
