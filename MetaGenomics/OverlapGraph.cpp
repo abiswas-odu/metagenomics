@@ -292,8 +292,12 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					//If this process is finished and all remote processes are finished end while loop
 					if(allRemoteFinish && myFinFlag)
 						allCompleteFlag=true;
-					//INT64 mem_end = checkMemoryUsage();
-					//cout<<"Proc:"<<myProcID<<" Round Complete:Marked "<<newMarkedCount<<" Memory usage:"<<mem_end<<endl;
+					if(newMarkedCount>0)
+					{
+						INT64 mem_end = checkMemoryUsage();
+						cout<<"Proc:"<<myProcID<<" Round Complete:Marked "<<newMarkedCount<<" Memory usage:"<<mem_end<<endl;
+					}
+					std::this_thread::sleep_for(std::chrono::milliseconds(100));
 				}//end of while
 				cout<<"Proc:"<<myProcID<<" Main communication thread complete!!!"<<endl;
 				delete allMarked;
@@ -368,8 +372,11 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 								removeTransitiveEdges(read1, parGraph); // Remove the transitive edges
 								exploredReads->at(read1) = EXPLORED_AND_TRANSITIVE_EDGES_REMOVED;
 								writtenMakedNodes++;
+
 							}
 						}
+						if(writtenMakedNodes%100==0)
+							cout<<"Proc:"<<myProcID<<" Thread:"<<threadID<<" Reads Processed:"<<writtenMakedNodes << endl;
 					}
 				}
 				INT64 mem_used = checkMemoryUsage();

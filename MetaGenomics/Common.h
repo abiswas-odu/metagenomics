@@ -36,6 +36,8 @@
 #include <stdexcept>
 #include <stdint.h>
 #include <memory>
+#include <thread>
+#include <chrono>
 using namespace std;
 
 typedef unsigned char UINT8;
