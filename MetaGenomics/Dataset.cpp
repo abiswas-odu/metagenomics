@@ -85,7 +85,7 @@ bool Dataset::readDataset(string fileName, UINT64 minOverlap, UINT64 datasetNumb
 	cout << "Reading dataset: " << datasetNumber << " from file: " << fileName << endl;
 	ifstream myFile;
 	myFile.open (fileName.c_str());
-	if(myFile == NULL)
+	if(!myFile)
 		MYEXIT("Unable to open file: "+fileName)
 	UINT64 goodReads = 0, badReads = 0;
 	vector<string> line;
