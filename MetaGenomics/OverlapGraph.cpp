@@ -184,7 +184,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 		int threadID = omp_get_thread_num();
 		if(threadID==0 && numprocs>1)
 		{
-			bool allCompleteFlag=false;
+			/*bool allCompleteFlag=false;
 			bool allRemoteFinish=false;
 			vector<bool> * allMarked = new vector<bool>;
 			allMarked->reserve(numElements);
@@ -290,7 +290,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			cout<<"Proc:"<<myProcID<<" Main communication thread complete!!!"<<endl;
 			delete allMarked;
 			delete[] newMarkedList;
-			delete[] readIDBuf;
+			delete[] readIDBuf;*/
 		}
 		else
 		{
