@@ -246,8 +246,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 								{
 									UINT64 rIndx = readIDBuf[i]-1;
 									allMarked->at(rIndx)=1;
-									#pragma omp atomic
-										myMarked[rIndx]++;
+									myMarked[rIndx]=1;
 								}
 								else
 									break;
@@ -324,8 +323,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					nodeQ->pop();
 					if(myMarked[read1-1]==0)
 					{
-						#pragma omp atomic
-							myMarked[read1-1]++;									//Mark this as being processed by this thread
+						myMarked[read1-1]=1;									//Mark this as being processed by this thread
 						if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
 						{
 							insertAllEdgesOfRead(read1, exploredReads, parGraph);					// Explore current node.
