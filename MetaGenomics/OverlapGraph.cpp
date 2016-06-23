@@ -179,6 +179,14 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
 	//Restart operations complete. Delete file index to read ID map
 	delete fIndxReadIDMap;
+	bool * allMarked = new bool[numElements];
+	for(UINT64 i = 0; i < numElements; i++) // Initialization with marked contained read
+	{
+		if(myMarked[i]==0)
+			allMarked[i]=0;
+		else
+			allMarked[i]=1;
+	}
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
 		int threadID = omp_get_thread_num();
@@ -309,9 +317,9 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				{
 					UINT64 read1 = nodeQ->front();										//Pop from queue...
 					nodeQ->pop();
-					if(myMarked[read1-1]==0)
+					if(allMarked[read1-1]==0)
 					{
-						myMarked[read1-1]=1;									//Mark this as being processed by this thread
+						allMarked[read1-1]=1;									//Mark this as being processed by this thread
 						if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
 						{
 							insertAllEdgesOfRead(read1, exploredReads, parGraph);					// Explore current node.
@@ -382,7 +390,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				startReadID=0;
 				for(size_t i=0;i<numElements;i++)
 				{
-					if(myMarked[i]==0)
+					if(allMarked[i]==0)
 					{
 						startReadID=i+1;
 						break;
