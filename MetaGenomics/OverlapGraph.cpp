@@ -145,9 +145,9 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			}
 		}
 	}
-	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
+	//MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
 	//Exchange previous marked reads
-	if(numprocs>1 && prevResultExists)			//Previous result exists and not only one process as it will deadlock
+	/*if(numprocs>1 && prevResultExists)			//Previous result exists and not only one process as it will deadlock
 	{
 		MPI_Request request[numprocs];
 		for(int i=0;i<numprocs;i++)
@@ -182,9 +182,9 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
 		int threadID = omp_get_thread_num();
-		if(threadID==0 && numprocs>1)
+		/*if(threadID==0 && numprocs>1)
 		{
-			/*bool allCompleteFlag=false;
+			bool allCompleteFlag=false;
 			bool allRemoteFinish=false;
 			vector<bool> * allMarked = new vector<bool>;
 			allMarked->reserve(numElements);
@@ -290,10 +290,10 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 			cout<<"Proc:"<<myProcID<<" Main communication thread complete!!!"<<endl;
 			delete allMarked;
 			delete[] newMarkedList;
-			delete[] readIDBuf;*/
+			delete[] readIDBuf;
 		}
 		else
-		{
+		{*/
 			UINT64 startReadID=(myProcID*parallelThreadPoolSize)+threadID;
 			while(startReadID!=0 && startReadID<=numElements) // Loop till all nodes marked
 			{
@@ -309,7 +309,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				{
 					UINT64 read1 = nodeQ->front();										//Pop from queue...
 					nodeQ->pop();
-					cout<<"Proc:"<<myProcID<<" Thread:"<<threadID<<" Read Start:"<<read1 << endl;
 					if(myMarked[read1-1]==0)
 					{
 						myMarked[read1-1]=1;									//Mark this as being processed by this thread
@@ -362,7 +361,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 							}
 						}
 					}
-					cout<<"Proc:"<<myProcID<<" Thread:"<<threadID<<" Reads Processed:"<<writtenMakedNodes << endl;
 				}
 				INT64 mem_used = checkMemoryUsage();
 				if(writtenMakedNodes>0)
@@ -391,7 +389,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 					}
 				}
 			}
-		}
+		//}
 	}
 	cout<<endl<<"Graph Construction Complete"<<endl;
 	CLOCKSTOP;
@@ -616,7 +614,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, map<UINT64, UINT64> *f
 		//Delete buffer of contained reads
 		delete[] buf;
 	}
-	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
+	//MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
 	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
 	{
 		Read *read1 = dataSet->getReadFromID(i); // Get the read

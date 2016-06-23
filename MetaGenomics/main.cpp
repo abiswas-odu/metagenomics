@@ -20,22 +20,23 @@ void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, 
 
 int main(int argc, char **argv)
 {
-	int numprocs, myid, len, provided=0;
-	double start, end;
-	char name[MPI_MAX_PROCESSOR_NAME];
+	int numprocs=1, myid=0, len, provided=0;
+	//double start, end;
+	//char name[MPI_MAX_PROCESSOR_NAME];
 
-	MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
+	/*MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &provided);
 	if (provided < MPI_THREAD_FUNNELED)
 	{
 	   printf("Error: the MPI library doesn't provide the required thread level\n");
 	   MPI_Abort(MPI_COMM_WORLD, 0);
-	}
-	MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
-	MPI_Comm_rank(MPI_COMM_WORLD,&myid);
-	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
-	MPI_Get_processor_name(name, &len);
-	start = MPI_Wtime();
-	printf("Rank %d running on %s with %d threads.\n", myid, name, omp_get_max_threads());
+	}*/
+	//MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
+	//MPI_Comm_rank(MPI_COMM_WORLD,&myid);
+	//MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
+	//MPI_Get_processor_name(name, &len);
+	//start = MPI_Wtime();
+	//printf("Rank %d running on %s with %d threads.\n", myid, name, omp_get_max_threads());
+	printf("Rank %d running with %d threads.\n", myid, omp_get_max_threads());
 	UINT64 minimumOverlapLength;
 	vector<string> pairedEndFileNames, singleEndFileNames;
 	string allFileName;
@@ -60,12 +61,12 @@ int main(int argc, char **argv)
 	delete hashTable;	//  Do not need the hash table any more.
 	delete dataSet;
 	delete overlapGraph;
-	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
-	end = MPI_Wtime();
-	if (myid == 0) { /* use time on master node */
-	   printf("Runtime for %d processes = %f\n", numprocs, end-start);
-	}
-	MPI_Finalize();
+	//MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
+	//end = MPI_Wtime();
+	//if (myid == 0) { /* use time on master node */
+	//  printf("Runtime for %d processes = %f\n", numprocs, end-start);
+	//}
+	//MPI_Finalize();
 }
 
 /**********************************************************************************************************************
