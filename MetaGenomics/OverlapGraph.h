@@ -38,7 +38,6 @@ class OverlapGraph
 	private:
 		Dataset * dataSet; 											// Pointer to the dataset containing all the reads.
 		HashTable * hashTable;										// Pointer to the hash table.
-		int *myMarked;												//List of reads already marked locally by this process or lazy globally
 		int myProcID;													// Id of the MPI process
 		UINT64 numberOfNodes;										// Number of nodes in the overlap graph.
 		UINT64 numberOfEdges;										// Number of edges in the overlap graph.
@@ -49,7 +48,7 @@ class OverlapGraph
 		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph,UINT64 maxMemSizeGB, string fnamePrefix,int myid, int numprocs);								// Another constructor.
 		~OverlapGraph();											// Destructor.
 		bool markTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph); // Mark transitive edges of a read.
-		bool buildOverlapGraphFromHashTable(HashTable *ht, string fnamePrefix, int numprocs);			// Build the overlap graph using hashtable.
+		bool buildOverlapGraphFromHashTable(string fnamePrefix, int numprocs);			// Build the overlap graph using hashtable.
 		bool insertEdge(Edge * edge, map<UINT64, vector<Edge*> * > *parGraph); 								// Insert an edge in the partial overlap graph.
 		bool insertEdge(Read *read1, Read *read2, UINT8 orient, UINT16 overlapOffset, map<UINT64, vector<Edge*> * > *parGraph); // Insert an edge in the overlap graph.
 

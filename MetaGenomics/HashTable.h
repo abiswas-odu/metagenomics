@@ -31,7 +31,7 @@ class HashTable{
 	private:
 		Dataset *dataSet;							// Pointer of the dataset. this is NOT modified here
 		UINT64 hashTableSize; 						// Ted: Size of the hash table. This is the prime number of mod operation.
-		UINT64 hashDataTableSize; 						// Ted: Size of the hash data table. This is based on the number of reads.
+		UINT64 hashDataTableSize; 						// AB: Size of the hash data table. This is based on the number of reads.
 		UINT64 *hashTable; 							// AB: List of hash offset of each hash key location
 		UINT64 *hashData; 							// AB: List of hash keys of read number (ID) and orientation.
 		UINT16 hashStringLength;					// Ted: Length of prefix and suffix of the reads to hash. This is equal to the minumum overlap length.
