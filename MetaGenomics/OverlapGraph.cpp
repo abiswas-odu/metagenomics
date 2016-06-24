@@ -254,7 +254,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(string fnamePrefix, int numpro
 					if(allMarked[i]>0 && allMarkedMaster->at(i)==0)
 					{
 						allMarkedMaster->at(i)=1;
-						newMarkedList[newMarkedCount++] = i+1;
+						newMarkedList[newMarkedCount++] = i;
 						if(newMarkedCount==MIN_MARKED)
 							break;
 					}
@@ -337,19 +337,8 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(string fnamePrefix, int numpro
 		else
 		{
 			UINT64 startReadID=0,prevReadID=0;
-			#pragma omp critical(assignRandomStart)    //Set initial start points...
-			{
-				for(UINT64 i=1;i<numNodes;i++)
-				{
-					if(allMarked[i]==0)
-					{
-						startReadID=prevReadID=i;
-						allMarked[i]=1;
-						break;
-					}
-				}
-			}
-			while(startReadID!=0) // Loop till all nodes marked
+			prevReadID=startReadID=(myProcID*parallelThreadPoolSize)+threadID;
+			while(startReadID!=0 && startReadID<numNodes) // Loop till all nodes marked
 			{
 				map<UINT64,nodeType> *exploredReads = new map<UINT64,nodeType>;							//Record of nodes processed
 				queue<UINT64> *nodeQ = new queue<UINT64>;												//Queue
@@ -368,7 +357,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(string fnamePrefix, int numpro
 						allMarked[read1]=1;
 					else
 						isPrevMarked=true;
-					if(!isPrevMarked || read1==startReadID)
+					if(!isPrevMarked)
 					{
 						if(exploredReads->find(read1) ==  exploredReads->end()) //if node is UNEXPLORED
 						{
@@ -422,8 +411,8 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(string fnamePrefix, int numpro
 				}
 				INT64 mem_used = checkMemoryUsage();
 				if(writtenMakedNodes>0)
-					cout<<"Thread:"<<threadID<<" Start Read ID:"<<startReadID<<" Reads Processed:"<<writtenMakedNodes<<" Memory Used:" << mem_used << endl;
-				saveParGraphToFile(fnamePrefix + "_" + SSTR(threadID) + "_parGraph.txt" , exploredReads, parGraph);
+					cout<<"Proc:"<<myProcID<<" Thread:"<<threadID<<" Start Read ID:"<<startReadID<<" Reads Processed:"<<writtenMakedNodes<<" Memory Used:" << mem_used << endl;
+				saveParGraphToFile(fnamePrefix + "_" + SSTR(myProcID) + "_" + SSTR(threadID) + "_parGraph.txt" , exploredReads, parGraph);
 				for (map<UINT64, vector<Edge*> * >::iterator it=parGraph->begin(); it!=parGraph->end();it++)
 				{
 					UINT64 readID = it->first;
@@ -441,7 +430,6 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(string fnamePrefix, int numpro
 				{
 					if(allMarked[i]==0){
 						startReadID=prevReadID=i;
-						allMarked[i]=1;
 						break;
 					}
 				}
@@ -670,6 +658,12 @@ void OverlapGraph::markContainedReads(string fnamePrefix, map<UINT64, UINT64> *f
 				MPI_Wait(&request[i],MPI_STATUS_IGNORE);
 		//Delete buffer of contained reads
 		delete[] buf;
+	}
+	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
+	{
+		Read *read1 = dataSet->getReadFromID(i); // Get the read
+		if(read1->superReadID==0)		//If read is already marked as contained, there is no need to look for contained reads within it
+			nonContainedReads++;
 	}
 	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
 	cout<< endl << setw(10) << nonContainedReads << " Non-contained reads. (Keep as is)" << endl;
