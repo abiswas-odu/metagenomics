@@ -52,7 +52,7 @@ int main(int argc, char **argv)
 	hashTable->insertDataset(dataSet, minimumOverlapLength,maxThreads);
 	OverlapGraph *overlapGraph=nullptr;
 	try{
-		overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,maxMemSizeGB,allFileName,myid,MPI_BLOCK,numprocs); //hashTable deleted by this function after building the graph also writes graph
+		overlapGraph=new OverlapGraph(hashTable,maxThreads,writeGraphSize,maxMemSizeGB,allFileName,myid,numprocs); //hashTable deleted by this function after building the graph also writes graph
 	} catch (const std::bad_alloc& e) {
 		std::cout << "Allocation failed: " << e.what() << '\n';
 		int ret_ignore=system("cp /proc/self/status .");

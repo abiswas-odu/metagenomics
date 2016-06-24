@@ -60,7 +60,6 @@ typedef long long INT64;
 
 //Multi-thread parallel options
 #define DEF_THREAD_COUNT 4
-#define MPI_BLOCK 10
 
 //Multi-thread parallel options
 #define MEGA_PAR_GRAPH_SIZE 20000

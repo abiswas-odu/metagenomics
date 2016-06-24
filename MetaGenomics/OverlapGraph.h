@@ -46,12 +46,12 @@ class OverlapGraph
 		UINT64 writeParGraphSize;									//No. of vertices to mark before writing graph to memory
 		UINT8 twinEdgeOrientation(UINT8 orientation);				// Orientation of the reverse edge.
 	public:
-		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph,UINT64 maxMemSizeGB, string fnamePrefix,int myid, int MPINodeBlockSize, int numprocs);								// Another constructor.
+		OverlapGraph(HashTable *ht,UINT64 maxThreads,UINT64 maxParGraph,UINT64 maxMemSizeGB, string fnamePrefix,int myid, int numprocs);								// Another constructor.
 		~OverlapGraph();											// Destructor.
 		bool markTransitiveEdges(UINT64 readNumber, map<UINT64, vector<Edge*> * > *parGraph); // Mark transitive edges of a read.
-		bool buildOverlapGraphFromHashTable(HashTable *ht, string fnamePrefix, int MPINodeBlockSize, int numprocs);			// Build the overlap graph using hashtable.
+		bool buildOverlapGraphFromHashTable(HashTable *ht, string fnamePrefix, int numprocs);			// Build the overlap graph using hashtable.
 		bool insertEdge(Edge * edge, map<UINT64, vector<Edge*> * > *parGraph); 								// Insert an edge in the partial overlap graph.
-		bool insertEdge(Read *read1, Read *read2, UINT64 r1Len, UINT64 r2Len,  UINT8 orient, UINT16 overlapOffset, map<UINT64, vector<Edge*> * > *parGraph); // Insert an edge in the overlap graph.
+		bool insertEdge(Read *read1, Read *read2, UINT8 orient, UINT16 overlapOffset, map<UINT64, vector<Edge*> * > *parGraph); // Insert an edge in the overlap graph.
 
 		bool checkOverlapForContainedRead(string read1, Read *read2, UINT64 orient, UINT64 start);
 		bool checkOverlap(string read1, Read *read2, UINT64 orient, UINT64 start);

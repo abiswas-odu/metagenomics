@@ -23,31 +23,59 @@ std::vector<std::string> splitTok(const std::string &s, char delim) {
 }
 
 /**********************************************************************************************************************
+	Check if two edges match.
+	e1(u,v) and e2(v,w). At node v, one of the edges should be an incoming edge and the other should be an outgoing
+	edge to match.
+**********************************************************************************************************************/
+bool matchEdgeType(Edge *edge1, Edge *edge2)
+{
+	if     ( (edge1->getOrientation() == 1 || edge1->getOrientation() == 3) && (edge2->getOrientation() == 2 || edge2->getOrientation() == 3) ) // *-----> and >------*
+		return true;
+	else if( (edge1->getOrientation() == 0 || edge1->getOrientation() == 2) && (edge2->getOrientation() == 0 || edge2->getOrientation() == 1) ) // *------< and <------*
+		return true;
+	return false;
+}
+
+/**********************************************************************************************************************
 	Function to compare two edges. Used for sorting.
 **********************************************************************************************************************/
+
+bool compareEdgeID (Edge *edge1, Edge* edge2)
+{
+	return (edge1->getDestinationRead()->getReadNumber() < edge2->getDestinationRead()->getReadNumber());
+}
+
+/**********************************************************************************************************************
+	Function to compare two edges. Used for sorting.
+**********************************************************************************************************************/
+
 bool compareEdges (Edge *edge1, Edge* edge2)
 {
 	return (edge1->getOverlapOffset() < edge2->getOverlapOffset());
 }
 
+
+bool isOverlappintInterval(UINT64 mean1, UINT64 sd1, UINT64 mean2, UINT64 sd2)
+{
+	int start1 = mean1 - 2*sd1;
+	int end1 = mean1 + 2*sd2;
+	int start2 = mean2 - 2*sd2;
+	int end2 = mean2 + 2 *sd2;
+	return (start1 >= start2 && start1 <= end2) || (end1 >= start2 && end1 <= end2) || (start2 >= start1 && start2 <= end1) || (end2 >= start1 && end2 <= end1);
+}
+
 /**********************************************************************************************************************
-	Constructor. Build the overlap graph using the hash table.
+	Another Constructor. Build the overlap graph using the hash table.
+BNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNMM
+
 **********************************************************************************************************************/
 OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph,
-		UINT64 maxMemSizeGB, string fnamePrefix, int myid,
-		int MPINodeBlockSize, int numprocs)
+		UINT64 maxMemSizeGB, string fnamePrefix,int myid, int numprocs)
 {
 	// Initialize the variables.
 	numberOfNodes = 0;
 	numberOfEdges = 0;
 	parallelThreadPoolSize=maxThreads;
-	writeParGraphSize=maxParGraph;
-	myProcID=myid;
-	hashTable = ht;
-	dataSet = ht->getDataset();
-	UINT64 numElements=dataSet->getNumberOfUniqueReads();
-	myMarked=new int[numElements];									//Read ID 1 is index 0 in this array
-	std::memset(myMarked, 0, numElements*sizeof(int));				//0 not marked; >0 already marked
 
 	UINT64 mem_used = checkMemoryUsage();
 	UINT64 maxMemSizeMB = maxMemSizeGB*1024;
@@ -65,8 +93,7 @@ OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph,
 	else
 		writeParGraphSize=MIN_PAR_GRAPH_SIZE;		// (0,5)GB per thread available
 
-
-	buildOverlapGraphFromHashTable(ht,fnamePrefix,MPINodeBlockSize,numprocs);
+	buildOverlapGraphFromHashTable(ht,fnamePrefix,numprocs);
 }
 
 /**********************************************************************************************************************
@@ -74,17 +101,21 @@ OverlapGraph::OverlapGraph(HashTable *ht, UINT64 maxThreads,UINT64 maxParGraph,
 **********************************************************************************************************************/
 OverlapGraph::~OverlapGraph()
 {
-	delete[] myMarked;
 	// Free the memory used by the overlap graph.
+
 }
 
 
 /**********************************************************************************************************************
 	Build the overlap graph from hash table
 **********************************************************************************************************************/
-bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePrefix, int MPINodeBlockSize, int numprocs)
+bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePrefix, int numprocs)
 {
 	CLOCKSTART;
+	numberOfNodes = 0;
+	numberOfEdges = 0;
+	hashTable = ht;
+	dataSet = ht->getDataset();
 
 	//Create a file index to readID lookup table. Used to load previous partial results in case of a restart...
 	map<UINT64, UINT64> *fIndxReadIDMap = new map<UINT64, UINT64>;
@@ -95,20 +126,30 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 		fIndxReadIDMap->insert(it, pair<UINT64,UINT64>(fIndx,i));
 	}
 
-	//Contained reads are considered already marked to remove them form further consideration...
-	markContainedReads(fnamePrefix, fIndxReadIDMap, numprocs);
-	UINT64 numElements=dataSet->getNumberOfUniqueReads();
-	bool prevResultExists=false;
+	markContainedReads(fnamePrefix, fIndxReadIDMap,numprocs);
+
+	UINT64 numNodes = dataSet->getNumberOfUniqueReads()+1;
+	bool * allMarked = new bool[numNodes];
+	allMarked[0]=0;
+	// Initialization; Marked contained reads are considered processed...
+	#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
+	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++)
+	{
+		if(dataSet->getReadFromID(i)->superReadID==0)
+			allMarked[i]=0;
+		else
+			allMarked[i]=1;
+	}
+
 	//Check if partial previous run data exists... Load partial graph data and mark reads.
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
 		int threadID = omp_get_thread_num();
-		string parFileName = fnamePrefix + "_" + SSTR(myProcID) + "_" + SSTR(threadID) + "_parGraph.txt";
+		string parFileName = fnamePrefix + "_" + SSTR(threadID) + "_parGraph.txt";
 
 		if(ifstream(parFileName.c_str()))
 		{
-			prevResultExists=true;
-			cout <<"Proc"<<myProcID<< "Thread:" << threadID << " Partial graph file exists. Loading marked reads." <<endl;
+			cout << "Thread:" << threadID << " Partial graph file exists. Loading marked reads." <<endl;
 			ifstream filePointer;
 			filePointer.open(parFileName.c_str());
 			string text;
@@ -132,178 +173,24 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				// 1: Only destination is marked
 				// 2: Both source and destination are marked
 				if(markFlag==0)
-					myMarked[sourceIt->second-1]=1;
+					allMarked[sourceIt->second]=1;
 				else if (markFlag==1)
-					myMarked[destIt->second-1]=1;
+					allMarked[destIt->second]=1;
 				else
 				{
-					myMarked[sourceIt->second-1]=1;
-					myMarked[destIt->second-1]=1;
+					allMarked[sourceIt->second]=1;
+					allMarked[destIt->second]=1;
 				}
 				if(procCtr%1000000==0)
-					cout<<"Proc"<<myProcID<< " Thread:" << threadID << " " <<procCtr<<" marked reads loaded ..."<<endl;
+					cout<< "Thread:" << threadID << " " <<procCtr<<" marked reads loaded ..."<<endl;
 			}
 		}
 	}
-	//MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
-	//Exchange previous marked reads
-	/*if(numprocs>1 && prevResultExists)			//Previous result exists and not only one process as it will deadlock
-	{
-		MPI_Request request[numprocs];
-		for(int i=0;i<numprocs;i++)
-		{
-			if(i==myProcID)
-			{
-				for(int j=0;j<numprocs;j++)
-					if(i!=j)
-						MPI_Isend(myMarked, numElements, MPI_INT, j, 0, MPI_COMM_WORLD, &request[j]);
-			}
-			else
-			{
-				int* readIDBuf = new int[numElements];
-				// Now receive the message with the allocated buffer
-				MPI_Recv(readIDBuf, numElements, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-				//Set contained read values
-				for(UINT64 i = 0; i < numElements; i++) // For each readid
-				{
-					if(readIDBuf[i]>0)
-						myMarked[i]=1;
-				}
-				delete[] readIDBuf;
-			}
-		}
-		for(int i=0;i<numprocs;i++)
-			if(i!=myProcID)
-				MPI_Wait(&request[i],MPI_STATUS_IGNORE);
-	}
-	MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
+
 	//Restart operations complete. Delete file index to read ID map
 	delete fIndxReadIDMap;
-	bool * allMarked = new bool[numElements+1];
-	allMarked[0]=0;
-	UINT64 numNodes = numElements+1;
-	for(UINT64 i = 0; i < numElements; i++) // Initialization with marked contained read
-	{
-		if(myMarked[i]==0)
-			allMarked[i+1]=0;
-		else
-			allMarked[i+1]=1;
-	}
 	#pragma omp parallel num_threads(parallelThreadPoolSize)
 	{
-		int threadID = omp_get_thread_num();
-		/*if(threadID==0 && numprocs>1)
-		{
-			bool allCompleteFlag=false;
-			bool allRemoteFinish=false;
-			vector<bool> * allMarked = new vector<bool>;
-			allMarked->reserve(numElements);
-			for(UINT64 i = 0; i < numElements; i++) // Initialization with marked contained read
-			{
-				if(myMarked[i]==0)
-					allMarked->push_back(0);
-				else
-					allMarked->push_back(1);
-			}
-
-			//Allocating buffer to send messages
-			UINT64 *newMarkedList=new UINT64[MIN_MARKED];
-			// Allocate a buffer to hold the incoming numbers
-			UINT64 *readIDBuf = new UINT64[MIN_MARKED];
-			while(!allCompleteFlag)
-			{
-				std::memset(newMarkedList, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
-				//Check if MIN_MARKED reads have been marked by this node
-				size_t newMarkedCount=0;
-				for(size_t i=0;i<numElements;i++)
-				{
-					if(myMarked[i]>0 && allMarked->at(i)==0)
-					{
-						allMarked->at(i)=1;
-						newMarkedList[newMarkedCount++] = i+1;
-						if(newMarkedCount==MIN_MARKED)
-							break;
-					}
-				}
-				//MIN_MARKED Reads have been marked inform other processes
-				MPI_Request sendRequest[numprocs-1];
-				size_t reqCtr=0;
-				//Send all my data
-				for(int j=0;j<numprocs;j++)
-				{
-					if(myProcID!=j)
-					{
-						MPI_Isend(newMarkedList, MIN_MARKED, MPI_UINT64_T, j, 0, MPI_COMM_WORLD, &sendRequest[reqCtr++]);
-					}
-				}
-				//Receive all my data
-				for(int i=0;i<numprocs;i++)
-				{
-					if(myProcID!=i)
-					{
-						MPI_Recv(readIDBuf, MIN_MARKED, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-						for(int i=0;i<MIN_MARKED;i++)
-						{
-							if(readIDBuf[i]>0)
-							{
-								UINT64 rIndx = readIDBuf[i]-1;
-								allMarked->at(rIndx)=1;
-								myMarked[rIndx]=1;
-							}
-							else
-								break;
-						}
-						std::memset(readIDBuf, 0, MIN_MARKED*sizeof(MPI_UINT64_T));
-					}
-				}
-				//Wait till all the sending is done...
-				MPI_Waitall(numprocs-1, sendRequest,MPI_STATUS_IGNORE);
-				//Test completion
-				int myFinFlag=1;
-				for(size_t i=0;i<numElements;i++)
-				{
-					if(allMarked->at(i)==0)
-					{
-						myFinFlag=0;
-						break;
-					}
-				}
-				//Inform others of status
-				reqCtr=0;
-				allRemoteFinish=true;
-				for(int j=0;j<numprocs;j++)
-				{
-					if(myProcID!=j)
-					{
-						MPI_Isend(&myFinFlag, 1, MPI_INT, j, 0, MPI_COMM_WORLD, &sendRequest[reqCtr++]);
-					}
-
-				}
-				//Get status from others
-				for(int i=0;i<numprocs;i++)
-				{
-					if(myProcID!=i)
-					{
-						int remoteFin=0;
-						MPI_Recv(&remoteFin, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-						allRemoteFinish = (allRemoteFinish && remoteFin);
-					}
-				}
-				//Wait till all the sending is done...
-				MPI_Waitall(numprocs-1, sendRequest,MPI_STATUS_IGNORE);
-				//If this process is finished and all remote processes are finished end while loop
-				if(allRemoteFinish && myFinFlag)
-					allCompleteFlag=true;
-				cout<<"Proc:"<<myProcID<<" Round Complete:Marked "<<newMarkedCount<<endl;
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
-			}//end of while
-			cout<<"Proc:"<<myProcID<<" Main communication thread complete!!!"<<endl;
-			delete allMarked;
-			delete[] newMarkedList;
-			delete[] readIDBuf;
-		}
-		else
-		{*/
 		UINT64 startReadID=0,prevReadID=0;
 		#pragma omp critical(assignRandomStart)    //Set initial start points...
 		{
@@ -317,6 +204,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				}
 			}
 		}
+		int threadID = omp_get_thread_num();
 		while(startReadID!=0) // Loop till all nodes marked
 		{
 			map<UINT64,nodeType> *exploredReads = new map<UINT64,nodeType>;							//Record of nodes processed
@@ -414,10 +302,10 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 				}
 			}
 		}
-		//}
 	}
 	delete[] allMarked;
-	cout<<endl<<"Graph Construction Complete"<<endl;
+	delete hashTable;	// Do not need the hash table any more.
+	cout<<endl<<"Graph construction complete."<<endl;
 	CLOCKSTOP;
 	return true;
 }
@@ -430,10 +318,8 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(HashTable *ht, string fnamePre
 void OverlapGraph::markContainedReads(string fnamePrefix, map<UINT64, UINT64> *fIndxReadIDMap, int numprocs)
 {
 	CLOCKSTART;
-
-	ofstream filePointer;
 	UINT64 nonContainedReads = 0;
-	string containedReadFile = fnamePrefix+"_"+SSTR(myProcID)+"_containedReads.txt";
+	string containedReadFile = fnamePrefix+"_containedReads.txt";
 	if(ifstream(containedReadFile.c_str()))
 	{
 		#pragma omp parallel num_threads(parallelThreadPoolSize)
@@ -467,29 +353,23 @@ void OverlapGraph::markContainedReads(string fnamePrefix, map<UINT64, UINT64> *f
 	}
 	else
 	{
+		ofstream filePointer;
 		filePointer.open(containedReadFile.c_str());
 		if(!filePointer)
-			MYEXIT("Unable to open file: +"+fnamePrefix+"_"+SSTR(myProcID)+"_containedReads.txt");
+			MYEXIT("Unable to open file: +"+fnamePrefix+"_containedReads.txt");
 
-		UINT64 numReadsPerProc = (dataSet->getNumberOfUniqueReads()/numprocs);
-		UINT64 startIndex = (numReadsPerProc*myProcID) +1;
-		UINT64 endIndex = dataSet->getNumberOfUniqueReads();
-		if((myProcID+1)<numprocs)
-			endIndex = (numReadsPerProc*(myProcID+1));
-
-		cout<<"Proc:"<<myProcID<<" Searching contained reads for range: ("<<startIndex<<","<<endIndex<<")"<<endl;
 		#pragma omp parallel for schedule(dynamic) num_threads(parallelThreadPoolSize)
-		for(UINT64 i = startIndex; i <= endIndex; i++) // For each read
+		for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
 		{
 			Read *read1 = dataSet->getReadFromID(i); // Get the read
 			if(read1->superReadID!=0)		//If read is already marked as contained, there is no need to look for contained reads within it
 				continue;
-			string read1String = hashTable->getStringForward(read1->getReadHashOffset()); // Get the forward of the read
+			string readString = hashTable->getStringForward(read1->getReadHashOffset()); // Get the forward of the read
 			string subString;
 			UINT64 read1Len = hashTable->getReadLength(read1->getReadHashOffset());
 			for(UINT64 j = 0; j < read1Len - hashTable->getHashStringLength(); j++) // fGr each substring of read1 of length getHashStringLength
 			{
-				subString = read1String.substr(j,hashTable->getHashStringLength()); // Get the substring from read1
+				subString = readString.substr(j,hashTable->getHashStringLength()); // Get the substring from read1
 				vector<UINT64> * listOfReads=hashTable->getListOfReads(subString); // Search the substring in the hash table
 				if(listOfReads) // If other reads contain the substring as prefix or suffix
 				{
@@ -505,10 +385,10 @@ void OverlapGraph::markContainedReads(string fnamePrefix, map<UINT64, UINT64> *f
 																							// Orientation 3 means prefix of reverse of the read
 						UINT64 read2Len = hashTable->getReadLength(read2->getReadHashOffset());
 
-						if(read1->getReadNumber() != read2->getReadNumber() && checkOverlapForContainedRead(read1String,read2,(data >> 62),j)) // read1 need to be longer than read2 in order to contain read2
+						if(read1->getReadNumber() != read2->getReadNumber() && checkOverlapForContainedRead(readString,read2,(data >> 62),j)) // read1 need to be longer than read2 in order to contain read2
 																																				 // Check if the remaining of the strings also match
 						{
-							if(read1String.length() > read2Len)
+							if(readString.length() > read2Len)
 							{
 								UINT64 overlapLen=0;
 								UINT64 orientation=1;
@@ -523,7 +403,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, map<UINT64, UINT64> *f
 								{
 									if(read2->superReadID == 0) // This is the first super read found. we store the ID of the super read.
 											read2->superReadID = i;
-									else if(read1String.length() > hashTable->getReadLength(dataSet->getReadFromID(read2->superReadID)->getReadHashOffset())) // This super read is longer than the previous super read. Update the super read ID.
+									else if(readString.length() > hashTable->getReadLength(dataSet->getReadFromID(read2->superReadID)->getReadHashOffset())) // This super read is longer than the previous super read. Update the super read ID.
 											read2->superReadID = i;
 									//Write contained read information regardless as it is a super read has been identified
 									filePointer<<read2->getFileIndex()<<"\t"<<read1->getFileIndex()<<"\t"<<orientation<<","
@@ -538,7 +418,7 @@ void OverlapGraph::markContainedReads(string fnamePrefix, map<UINT64, UINT64> *f
 											<<endl;
 								}
 							}
-							else if(read1String.length() == read2Len && read1->getReadNumber() < read2->getReadNumber())
+							else if(readString.length() == read2Len && read1->getReadNumber() < read2->getReadNumber())
 							{
 								UINT64 overlapLen=0;
 								UINT64 orientation=1;
@@ -576,83 +456,18 @@ void OverlapGraph::markContainedReads(string fnamePrefix, map<UINT64, UINT64> *f
 			}//End of inner for
 		}
 		filePointer.close();
-		cout<<"Proc:"<<myProcID<<" Completed contained read computation."<<endl;
 	}
-	//If multiple MPI processes
-	if(numprocs>1)			//Only one process will deadlock
-	{
-		int ctdReads=0;
-		//Get contained read count
-		for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
-		{
-			Read *read1 = dataSet->getReadFromID(i); // Get the read
-			if(read1->superReadID!=0)		//If read is already marked as contained, there is no need to look for contained reads within it
-				ctdReads++;
-		}
-
-		UINT64 *buf = new UINT64[ctdReads];
-		size_t j=0;
-		//Populate buffer of contained reads
-		for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
-		{
-			Read *read1 = dataSet->getReadFromID(i); // Get the read
-			if(read1->superReadID!=0)		//If read is already marked as contained, there is no need to look for contained reads within it
-			{
-				buf[j]=i;
-				j++;
-			}
-		}
-
-		MPI_Request request[numprocs];
-		for(int i=0;i<numprocs;i++)
-		{
-			if(i==myProcID)
-			{
-				for(int j=0;j<numprocs;j++)
-					if(i!=j)
-						MPI_Isend(buf, ctdReads, MPI_UINT64_T, j, 0, MPI_COMM_WORLD, &request[j]);
-			}
-			else
-			{
-				int number_amount;
-				MPI_Status status;
-				// Probe for an incoming message from process i
-				MPI_Probe(i, 0, MPI_COMM_WORLD, &status);
-				// When probe returns, the status object has the size and other
-				// attributes of the incoming message. Get the message size
-				MPI_Get_count(&status, MPI_UINT64_T, &number_amount);
-				// Allocate a buffer to hold the incoming numbers
-				UINT64* readIDBuf = new UINT64[number_amount];
-				// Now receive the message with the allocated buffer
-				MPI_Recv(readIDBuf, number_amount, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-				//Set contained read values
-				for(int i = 0; i < number_amount; i++) // For each readid
-				{
-					Read *read1 = dataSet->getReadFromID(readIDBuf[i]); // Get the read
-					read1->superReadID=1;
-				}
-				delete[] readIDBuf;
-			}
-		}
-		for(int i=0;i<numprocs;i++)
-			if(i!=myProcID)
-				MPI_Wait(&request[i],MPI_STATUS_IGNORE);
-		//Delete buffer of contained reads
-		delete[] buf;
-	}
-	//MPI_Barrier(MPI_COMM_WORLD); /* IMPORTANT */
 	for(UINT64 i = 1; i <= dataSet->getNumberOfUniqueReads(); i++) // For each read
 	{
 		Read *read1 = dataSet->getReadFromID(i); // Get the read
 		if(read1->superReadID==0)		//If read is already marked as contained, there is no need to look for contained reads within it
 			nonContainedReads++;
-		else
-			myMarked[i-1]=1;			//Once marked this read will not be marked by the graph construction...
 	}
 	cout<< endl << setw(10) << nonContainedReads << " Non-contained reads. (Keep as is)" << endl;
 	cout<< setw(10) << dataSet->getNumberOfUniqueReads()-nonContainedReads << " contained reads. (Need to change their mate-pair information)" << endl;
 	CLOCKSTOP;
 }
+
 
 /**********************************************************************************************************************
 	Hash table search found that a proper substring of read1 is a prefix or suffix of read2 or reverse complement of
@@ -701,6 +516,7 @@ bool OverlapGraph::checkOverlapForContainedRead(string read1, Read *read2, UINT6
 	return false;
 
 }
+
 
 /**********************************************************************************************************************
 	Checks if two read overlaps.
@@ -759,10 +575,10 @@ bool OverlapGraph::insertEdge(Edge * edge, map<UINT64, vector<Edge*> * > *parGra
 /**********************************************************************************************************************
 	Insert an edge in the graph.
 **********************************************************************************************************************/
-bool OverlapGraph::insertEdge(Read *read1, Read *read2, UINT64 r1Len, UINT64 r2Len, UINT8 orient, UINT16 overlapOffset, map<UINT64, vector<Edge*> * > *parGraph)
+bool OverlapGraph::insertEdge(Read *read1, Read *read2, UINT8 orient, UINT16 overlapOffset, map<UINT64, vector<Edge*> * > *parGraph)
 {
 	Edge * edge1 = new Edge(read1,read2,orient,overlapOffset);								// Create a new edge in the graph to insert.
-	UINT16 overlapOffsetReverse = r2Len + overlapOffset - r1Len;	// Set the overlap offset accordingly for the reverse edge. Note that read lengths are different.
+	UINT16 overlapOffsetReverse = hashTable->getReadLength(read2->getReadHashOffset()) + overlapOffset - hashTable->getReadLength(read1->getReadHashOffset());	// Set the overlap offset accordingly for the reverse edge. Note that read lengths are different.
 																						// If read lengths are the same. Then the reverse edge has the same overlap offset.
 	Edge * edge2 = new Edge(read2,read1,twinEdgeOrientation(orient),overlapOffsetReverse);		// Create a new edge for the reverses string.
 
@@ -779,13 +595,13 @@ bool OverlapGraph::insertEdge(Read *read1, Read *read2, UINT64 r1Len, UINT64 r2L
 bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> * exploredReads, map<UINT64, vector<Edge*> * > *parGraph)
 {
 	Read *read1 = dataSet->getReadFromID(readNumber); 	// Get the current read read1.
-	string read1String = hashTable->getStringForward(read1->getReadHashOffset()); 		// Get the forward string of read1.
+	string readString = hashTable->getStringForward(read1->getReadHashOffset()); 		// Get the forward string of read1.
 	string subString;
 	vector<UINT64> insertedEdgeList;
 	UINT64 read1Len = hashTable->getReadLength(read1->getReadHashOffset());
 	for(UINT64 j = 1; j < read1Len-hashTable->getHashStringLength(); j++) // For each proper substring of length getHashStringLength of read1
 	{
-		subString = read1String.substr(j,hashTable->getHashStringLength());  // Get the proper substring s of read1.
+		subString = readString.substr(j,hashTable->getHashStringLength());  // Get the proper substring s of read1.
 		vector<UINT64> * listOfReads=hashTable->getListOfReads(subString); // Search the string in the hash table.
 		if(listOfReads) // If there are some reads that contain s as prefix or suffix of the read or their reverse complement
 		{
@@ -796,15 +612,13 @@ bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> 
 				UINT16 overlapLen=0;
 				UINT8 orientation=1;
 				Read *read2 = dataSet->getReadFromID(read2ID); 	// Least significant 62 bits store the read number.
-				UINT64 read2Len = hashTable->getReadLength(read2->getReadHashOffset());
-
 				if(exploredReads->find(read2ID) !=  exploredReads->end())
 					continue;                                                       // No need to discover the same edge again. All edges of read2 is already inserted in the graph.
 
 				if(readNumber != read2ID 											//Must not be a loop
 						&& find(insertedEdgeList.begin(), insertedEdgeList.end(), read2ID)==insertedEdgeList.end()     //Must not have already added an edge with greater overlap
 						&& read1->superReadID == 0 && read2->superReadID == 0		// Both read need to be non contained.
-						&& checkOverlap(read1String,read2,(data >> 62),j)) 				// Must overlap
+						&& checkOverlap(readString,read2,(data >> 62),j)) 				// Must overlap
 				{
 					switch (data >> 62) // Most significant 2 bit represents  00 - prefix forward, 01 - suffix forward, 10 -  prefix reverse, 11 -  suffix reverse.
 					{
@@ -813,7 +627,7 @@ bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> 
 						case 2: orientation = 2; overlapLen = read1Len - j; break; 				// 2 = r1>-------<r2
 						case 3: orientation = 1; overlapLen = hashTable->getHashStringLength() + j; break; 		// 1 = r2<------->r2
 					}
-					insertEdge(read1,read2,read1Len,read2Len,orientation,read1Len-overlapLen, parGraph); 			// Insert the edge in the graph.
+					insertEdge(read1,read2,orientation,read1Len-overlapLen, parGraph); 			// Insert the edge in the graph.
 					insertedEdgeList.push_back(read2ID);
 				}
 			}
@@ -824,6 +638,9 @@ bool OverlapGraph::insertAllEdgesOfRead(UINT64 readNumber, map<UINT64,nodeType> 
 		sort(parGraph->at(readNumber)->begin(),parGraph->at(readNumber)->end(), compareEdges); // Sort the list of edges of the current node according to the overlap offset (ascending).
 	return true;
 }
+
+
+
 
 /**********************************************************************************************************************
 	Mark all the transitive edges of a read.
