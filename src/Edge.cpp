@@ -1,69 +1,68 @@
 /*
- * Read.cpp
+ * Edge.cpp
  *
  * Created on: April 22, 2013
  * Author: Md. Bahlul Haider
  */
 
-#include "Common.h"
-#include "Read.h"
+#include "../src/Edge.h"
 
+#include "../src/Common.h"
 
 
 /**********************************************************************************************************************
-	Default constructor
+	Default Constructor
 **********************************************************************************************************************/
-Read::Read(void)
+Edge::Edge(void)
 {
+
 	// Initialize the variables.
-	readNumber = 0;
-	superReadID = 0;
-	fileIndex=0;
+	overlapOffset = 0;
+	overlapOrientation = 10;
+	transitiveRemovalFlag = false;
 }
 
+
+
 /**********************************************************************************************************************
-	Another constructor
+	Another Constructor
 **********************************************************************************************************************/
-Read::Read(UINT64 fIndx)
+Edge::Edge(Read *from, Read *to, UINT64 orient, UINT64 length)
 {
-	readNumber = 0;
-	superReadID = 0;
-	fileIndex=fIndx;
+	makeEdge(from, to, orient, length);
 }
 
 /**********************************************************************************************************************
 	Default destructor
 **********************************************************************************************************************/
-Read::~Read(void)
+Edge::~Edge()
 {
-	// delete all the pointers.
+	// Free the memory used by the current edge.
 }
+
+
+
 /**********************************************************************************************************************
-	This function assigns an ID to the read.
+	Function to insert a simple edge
 **********************************************************************************************************************/
-bool Read::setReadNumber(UINT64 id)
+bool Edge::makeEdge(Read *from, Read *to, UINT64 orient, UINT64 length)
 {
-	if(id <= 0) MYEXIT("ID less than 1.");
-	readNumber = id;												// Set the read number.
+	source = from;
+	destination = to;
+	overlapOrientation = orient;
+	overlapOffset = length;
+	// Initialize variables.
+	transitiveRemovalFlag = false;
 	return true;
 }
+
 /**********************************************************************************************************************
-	This function assigns an ID to the read.
+	Function to set the pointer to the reverse edge;
 **********************************************************************************************************************/
-void Read::setFileIndex(UINT64 id)
+bool Edge::setReverseEdge(Edge * edge)
 {
-	if(id <= 0) MYEXIT("ID less than 1.");
-	fileIndex = id;												// Set the read number.
+	reverseEdge = edge;
+	return true;
 }
-/**********************************************************************************************************************
-	Returns the reverse complement of a read.
-**********************************************************************************************************************/
-
-void Read::setReadHashOffset(UINT64 offset)
-{
-	readHashOffset=offset;
-}
-
-
 
 

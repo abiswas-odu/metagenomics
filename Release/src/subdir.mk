@@ -4,32 +4,32 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 CPP_SRCS += \
-../../MetaGenomics/Dataset.cpp \
-../../MetaGenomics/Edge.cpp \
-../../MetaGenomics/HashTable.cpp \
-../../MetaGenomics/OverlapGraph.cpp \
-../../MetaGenomics/Read.cpp \
-../../MetaGenomics/main.cpp 
+../../src/Dataset.cpp \
+../../src/Edge.cpp \
+../../src/HashTable.cpp \
+../../src/OverlapGraph.cpp \
+../../src/Read.cpp \
+../../src/main.cpp 
 
 OBJS += \
-./MetaGenomics/Dataset.o \
-./MetaGenomics/Edge.o \
-./MetaGenomics/HashTable.o \
-./MetaGenomics/OverlapGraph.o \
-./MetaGenomics/Read.o \
-./MetaGenomics/main.o 
+./src/Dataset.o \
+./src/Edge.o \
+./src/HashTable.o \
+./src/OverlapGraph.o \
+./src/Read.o \
+./src/main.o 
 
 CPP_DEPS += \
-./MetaGenomics/Dataset.d \
-./MetaGenomics/Edge.d \
-./MetaGenomics/HashTable.d \
-./MetaGenomics/OverlapGraph.d \
-./MetaGenomics/Read.d \
-./MetaGenomics/main.d 
+./src/Dataset.d \
+./src/Edge.d \
+./src/HashTable.d \
+./src/OverlapGraph.d \
+./src/Read.d \
+./src/main.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
-MetaGenomics/%.o: ../MetaGenomics/%.cpp
+src/%.o: ../src/%.cpp
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
 	g++ -g3 -Wall -c -fmessage-length=0 -fopenmp -std=c++11 -O3 -lgomp -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"

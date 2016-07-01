@@ -7,12 +7,12 @@
  */
 
 
-#include "Common.h"
-#include "Read.h"
-#include "Dataset.h"
-#include "HashTable.h"
-#include "Edge.h"
-#include "OverlapGraph.h"
+#include "../src/Common.h"
+#include "../src/Dataset.h"
+#include "../src/Edge.h"
+#include "../src/HashTable.h"
+#include "../src/OverlapGraph.h"
+#include "../src/Read.h"
 
 void parseArguments(int argc, char **argv, vector<string> & pairedEndFileNames, vector<string> & singleEndFileNames,
 		string & allFileName, UINT64 & minimumOverlapLength,

@@ -9,7 +9,7 @@
 #ifndef READ_H_
 #define READ_H_
 
-#include "Common.h"
+#include "../src/Common.h"
 
 /**********************************************************************************************************************
 	Class to store a read.

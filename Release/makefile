@@ -1,5 +1,5 @@
 ################################################################################
-# Automatically-generated file. Do not edit!
+# Make file for overlap graph builder
 ################################################################################
 
 -include ../makefile.init
@@ -8,8 +8,7 @@ RM := rm -rf
 
 # All of the sources participating in the build are defined here
 -include sources.mk
--include MetaGenomics/Debug/subdir.mk
--include MetaGenomics/subdir.mk
+-include src/subdir.mk
 -include subdir.mk
 -include objects.mk
 
