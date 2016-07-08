@@ -6,6 +6,8 @@
 
 RM := rm -rf
 
+COMP := mpic++
+
 # All of the sources participating in the build are defined here
 -include sources.mk
 -include MetaGenomics/Debug/subdir.mk
@@ -45,7 +47,7 @@ all: buildG_mpi
 buildG_mpi: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C++ Linker'
-	mpic++ -fopenmp -std=c++11 -o "buildG_mpi" $(OBJS) $(USER_OBJS) $(LIBS)
+	-$(COMP) -fopenmp -std=c++11 -o "buildG_mpi" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
