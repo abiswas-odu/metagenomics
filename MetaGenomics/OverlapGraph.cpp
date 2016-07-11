@@ -278,7 +278,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(string fnamePrefix, int numpro
 						MPI_Recv(readIDBuf, MIN_MARKED, MPI_UINT64_T, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 						for(int i=0;i<MIN_MARKED;i++)
 						{
-							if(readIDBuf[i]>0)
+							if(readIDBuf[i]>0 && readIDBuf[i]<numNodes)
 							{
 								allMarkedMaster->at(readIDBuf[i])=1;
 								allMarked[readIDBuf[i]]=1;
@@ -327,7 +327,7 @@ bool OverlapGraph::buildOverlapGraphFromHashTable(string fnamePrefix, int numpro
 				//If this process is finished and all remote processes are finished end while loop
 				if(allRemoteFinish && myFinFlag)
 					allCompleteFlag=true;
-				std::this_thread::sleep_for(std::chrono::milliseconds(100));
+				//std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			}//end of while
 			cout<<"Proc:"<<myProcID<<" Main communication thread complete!!!"<<endl;
 			delete allMarkedMaster;

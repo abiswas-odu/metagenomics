@@ -32,7 +32,7 @@ CPP_DEPS += \
 MetaGenomics/%.o: ../MetaGenomics/%.cpp
 	@echo 'Building file: $<'
 	@echo 'Invoking: GCC C++ Compiler'
-	-$(COMP) -g3 -Wall -c -fmessage-length=0 -std=c++11 -fopenmp -O3 -lgomp -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
+	-$(COMP) -Wl,--eh-frame-hdr -g3 -Wall -c -fmessage-length=0 -std=c++11 -fopenmp -O3 -lgomp -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)" -o "$@" "$<"
 	@echo 'Finished building: $<'
 	@echo ' '
 

@@ -47,7 +47,7 @@ all: buildG_mpi
 buildG_mpi: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C++ Linker'
-	-$(COMP) -fopenmp -std=c++11 -o "buildG_mpi" $(OBJS) $(USER_OBJS) $(LIBS)
+	-$(COMP) -Wl,--eh-frame-hdr -fopenmp -std=c++11 -o "buildG_mpi" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
